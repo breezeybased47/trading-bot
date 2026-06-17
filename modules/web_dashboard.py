@@ -142,12 +142,11 @@ def dashboard():
     try:
         from alpaca.trading.client import TradingClient
         from alpaca.trading.requests import GetOrdersRequest
-        from alpaca.trading.enums import OrderStatus
 
         client = TradingClient(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper=PAPER_TRADING)
         account = client.get_account()
         positions = client.get_all_positions()
-        orders = client.get_orders(GetOrdersRequest(status=OrderStatus.FILLED, limit=20))
+        orders = client.get_orders(GetOrdersRequest(status="closed", limit=20))
 
         pnl = float(account.equity) - float(account.last_equity)
 
