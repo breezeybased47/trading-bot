@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "trading-dashboard",
+      "runtimeExecutable": "/Users/breezeybased/trading_bot/venv/bin/python3",
+      "runtimeArgs": ["/Users/breezeybased/trading_bot/web_dashboard.py"],
+      "port": 5001
+    }
+  ]
+}

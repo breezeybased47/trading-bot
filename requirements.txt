@@ -1,0 +1,11 @@
+alpaca-py>=0.13.0
+pandas>=2.0.0
+numpy>=1.24.0
+pandas-ta>=0.3.14b0
+rich>=13.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+pytz>=2023.3
+websocket-client>=1.6.0
+# Optional — only needed for Telegram alerts
+# python-telegram-bot>=20.0

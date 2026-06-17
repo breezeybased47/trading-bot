@@ -1,0 +1,16 @@
+# API keys — never commit these
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Logs and data
+logs/*.csv
+data/
+
+# macOS
+.DS_Store
