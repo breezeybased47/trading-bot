@@ -146,7 +146,13 @@ def dashboard():
         client = TradingClient(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper=PAPER_TRADING)
         account = client.get_account()
         positions = client.get_all_positions()
-        orders = client.get_orders(GetOrdersRequest(status="closed", limit=20))
+        try:
+            orders = client.get_orders(GetOrdersRequest(status="closed", limit=20))
+        except Exception:
+            try:
+                orders = client.get_orders(GetOrdersRequest(status="all", limit=20))
+            except Exception:
+                orders = []
 
         pnl = float(account.equity) - float(account.last_equity)
 
