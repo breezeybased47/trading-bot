@@ -99,12 +99,13 @@ class Broker:
     def cancel(self, order_id: str) -> bool:
         try:
             self._client.cancel_order_by_id(order_id)
-            self._pending.pop(order_id, None)
             logger.info(f"Cancelled order {order_id}")
             return True
         except Exception as exc:
             logger.error(f"cancel failed ({order_id}): {exc}")
             return False
+        finally:
+            self._pending.pop(order_id, None)
 
     def cancel_stale(self):
         """Cancel any order that has been open longer than UNFILLED_ORDER_TIMEOUT seconds."""
