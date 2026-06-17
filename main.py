@@ -25,6 +25,7 @@ from modules.indicators import compute, latest as ind_latest
 from modules.risk_manager import RiskManager
 from modules.strategy import BUY, SELL, Signal, StrategyEngine
 from modules.trade_logger import init as init_log, record as log_trade
+from modules.web_dashboard import start as start_web
 
 # ── Logging setup ─────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -164,6 +165,7 @@ class Bot:
             return
 
         init_log()
+        start_web()
         self.feed.register_bar_callback(self.on_bar)
         self.feed.load_history()
         self.running = True
