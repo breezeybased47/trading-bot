@@ -23,6 +23,7 @@ captures · ❓ needs the exact rules from you.
 | Introduction to ETFs & the risk | ETF mechanics/risk | ✅ ETF rotation logic + the new leverage guard |
 | Waiting for confirmation | Don't anticipate | 🆕 `confirmation.py` overlay + baked into the reversal's break-and-retest (paper challenger) |
 | 3 stages of a reversal | Break-and-retest entry | 🆕 `reversal_strategy.py` — rejection → consolidation → break of resistance + retest hold = BUY (paper challenger) |
+| Overbought reversals (short) | Short overbought + active sell-off | 🆕 `overbought_reversal.py` — RSI>70 + >upper BB, then rolls over = paper SHORT. (InvestingPro "fair value" = paid, NOT integrated; bot is long-only so this is paper-only) |
 | Factors that impact stocks | Context awareness | ✅ regime filter + correlation guard tag/measure context |
 | Planning your trades | Trade a plan | 🧠 journal records the plan-context (regime, signals, size) of every trade |
 | Quality trades | Be selective | 🧠 journal report flags low-quality tag combinations to avoid |

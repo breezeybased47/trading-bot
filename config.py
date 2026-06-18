@@ -38,6 +38,7 @@ RSI_PERIOD   = 14
 RSI_BUY      = 55       # RSI crosses above this → momentum buy signal
 RSI_SELL     = 45       # RSI drops below this  → momentum sell signal
 RSI_OVERSOLD = 30       # RSI below this        → mean reversion buy setup
+RSI_OVERBOUGHT = 70     # RSI above this        → overbought (short-reversal setup)
 MACD_FAST    = 12
 MACD_SLOW    = 26
 MACD_SIGNAL  = 9
@@ -226,3 +227,10 @@ REVERSAL_RETEST_MAX_BARS   = 20     # give up waiting for the retest after N bar
 REVERSAL_STOP_BUFFER       = 0.003  # stop just below the new support (old resistance)
 REVERSAL_TARGET_R          = 2.0    # profit target = R-multiple (not specified by course; default)
 CONFIRMATION_MAX_BARS  = 2          # wait up to N bars for confirmation, else skip
+
+# Overbought-reversal SHORT ("overbought reversals" lesson). PAPER ONLY — the live
+# bot is long-only; this simulates shorts so the setup can be A/B-studied. (The
+# course's InvestingPro "fair value" data is a paid tool and is NOT integrated.)
+OVERBOUGHT_LOOKBACK    = 10         # bars to remember "was overbought" before the roll-over
+OVERBOUGHT_TARGET_R    = 2.0        # downside target = R-multiple of the risk
+OVERBOUGHT_STOP_BUFFER = 0.003      # stop just above the overbought peak

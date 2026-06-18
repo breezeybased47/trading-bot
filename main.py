@@ -42,6 +42,7 @@ from modules.ml_filter import MLFilter
 from modules.position_sizer import PositionSizer
 from modules.premarket_scanner import PremarketScanner
 from modules.reversal_strategy import ReversalStrategy
+from modules.overbought_reversal import OverboughtReversalStrategy
 from modules.confirmation import ConfirmationOverlay
 from modules.paper_engine import PaperEngine, PaperBook
 from modules.regime_filter import RegimeFilter
@@ -91,6 +92,7 @@ class Bot:
             PaperBook("reversal", ReversalStrategy(), config.PAPER_POSITION_DOLLARS),
             PaperBook("champ_confirmed", ConfirmationOverlay(StrategyEngine(self.feed)),
                       config.PAPER_POSITION_DOLLARS),
+            PaperBook("overbought_short", OverboughtReversalStrategy(), config.PAPER_POSITION_DOLLARS),
         ])
         self._shadow_on  = config.SHADOW_ENABLED or config.RESEARCH_MODE
 

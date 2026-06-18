@@ -19,9 +19,10 @@ config.STRUCTURED_LOG_FILE = os.path.join(tempfile.mkdtemp(prefix="paper_"), "ev
 config.RESEARCH_MODE = False
 
 from modules.reversal_strategy import ReversalStrategy   # noqa: E402
+from modules.overbought_reversal import OverboughtReversalStrategy  # noqa: E402
 from modules.confirmation import ConfirmationOverlay     # noqa: E402
 from modules.paper_engine import PaperBook, PaperEngine  # noqa: E402
-from modules.strategy import BUY, SELL, Signal           # noqa: E402
+from modules.strategy import BUY, SELL, SHORT, Signal    # noqa: E402
 
 
 def _frame(closes):
@@ -179,6 +180,66 @@ class TestPaperEngine(unittest.TestCase):
         comp = eng.comparison()
         self.assertEqual(comp["rev"]["n"], 1)
         self.assertEqual(comp["rev"]["total"], 400.0)
+
+
+class TestOverboughtReversal(unittest.TestCase):
+    def _run(self, closes):
+        frame = _frame(closes)
+        strat = OverboughtReversalStrategy()
+        sigs = []
+        for i in range(config.MIN_CANDLES, len(frame) + 1):
+            s = strat.evaluate("X", frame.iloc[:i])
+            if s:
+                sigs.append(s)
+        return sigs
+
+    def test_shorts_overbought_rollover(self):
+        closes = (list(np.linspace(80, 95, 50)) + [96, 97.5, 99, 101, 102]   # rally into overbought
+                  + [99.5, 96.5, 93.5])                                       # sharp roll-over
+        shorts = [s for s in self._run(closes) if s.action == SHORT]
+        self.assertTrue(shorts, "expected an overbought SHORT on the roll-over")
+        s = shorts[0]
+        self.assertEqual(s.strategy, "overbought_short")
+        self.assertGreater(s.stop, s.price)      # stop ABOVE entry (short)
+        self.assertLess(s.target, s.price)       # target BELOW entry
+
+    def test_no_short_on_steady_uptrend(self):
+        closes = list(np.linspace(80, 100, 60))  # rallies but never rolls over
+        self.assertEqual([s for s in self._run(closes) if s.action == SHORT], [])
+
+
+class TestPaperShort(unittest.TestCase):
+    class _ScriptStrat:
+        def __init__(self, script):
+            self.script, self.i = script, 0
+        def evaluate(self, ticker, candles):
+            s = self.script[self.i] if self.i < len(self.script) else None
+            self.i += 1
+            return s
+
+    @staticmethod
+    def _bar(close):
+        return pd.DataFrame({"close": [close], "high": [close], "low": [close]})
+
+    def _short(self, stop, target):
+        s = Signal("X", SHORT, "ob", "", 100.0)
+        s.stop, s.target = stop, target
+        return s
+
+    def setUp(self):
+        config.PAPER_ENGINE_ENABLED = True
+
+    def test_short_profits_when_price_falls(self):
+        book = PaperBook("ob", self._ScriptStrat([self._short(103, 94), None]), 10000)
+        book.on_bar("X", self._bar(100.0))     # open short @100, qty 100
+        book.on_bar("X", self._bar(94.0))      # fell to target -> cover
+        self.assertEqual(book.pnls, [600.0])   # (100-94)*100
+
+    def test_short_stops_out_when_price_rises(self):
+        book = PaperBook("ob", self._ScriptStrat([self._short(103, 90), None]), 10000)
+        book.on_bar("X", self._bar(100.0))
+        book.on_bar("X", self._bar(104.0))     # rose above stop -> cover loss
+        self.assertEqual(book.pnls, [-400.0])  # (100-104)*100
 
 
 if __name__ == "__main__":

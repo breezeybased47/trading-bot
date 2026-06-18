@@ -25,6 +25,8 @@ ET = pytz.timezone("America/New_York")
 BUY  = "BUY"
 SELL = "SELL"
 HOLD = "HOLD"
+SHORT = "SHORT"   # open a short — paper engine only; the live bot is long-only
+COVER = "COVER"   # buy to cover a short
 
 
 class Signal:

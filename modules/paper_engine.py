@@ -18,7 +18,7 @@ from typing import List, Optional
 
 import config
 from modules import structured_log as slog
-from modules.strategy import BUY, SELL
+from modules.strategy import BUY, SELL, SHORT, COVER
 
 logger = logging.getLogger(__name__)
 
@@ -49,29 +49,41 @@ class PaperBook:
 
         pos = self.positions.get(ticker)
         if pos is not None:
-            reason = None
-            if pos["stop"] is not None and price <= pos["stop"]:
-                reason = "stop"
-            elif pos["target"] is not None and price >= pos["target"]:
-                reason = "target"
-            elif sig is not None and sig.action == SELL:
-                reason = "signal"
+            reason, pnl = None, None
+            if pos["side"] == "long":
+                if pos["stop"] is not None and price <= pos["stop"]:
+                    reason = "stop"
+                elif pos["target"] is not None and price >= pos["target"]:
+                    reason = "target"
+                elif sig is not None and sig.action == SELL:
+                    reason = "signal"
+                if reason:
+                    pnl = (price - pos["entry"]) * pos["qty"]
+            else:  # short — profits when price FALLS; stop is above, target below
+                if pos["stop"] is not None and price >= pos["stop"]:
+                    reason = "stop"
+                elif pos["target"] is not None and price <= pos["target"]:
+                    reason = "target"
+                elif sig is not None and sig.action in (BUY, COVER):
+                    reason = "cover"
+                if reason:
+                    pnl = (pos["entry"] - price) * pos["qty"]
             if reason:
-                pnl = (price - pos["entry"]) * pos["qty"]
                 self.pnls.append(pnl)
-                slog.log_event("paper_trade", strategy=self.name, ticker=ticker,
+                slog.log_event("paper_trade", strategy=self.name, ticker=ticker, side=pos["side"],
                                pnl=round(pnl, 2), reason=reason, entry=pos["entry"], exit=price)
                 del self.positions[ticker]
             return
 
-        if sig is not None and sig.action == BUY:
+        if sig is not None and sig.action in (BUY, SHORT):
             qty = max(1, int(self.dollars / price))
+            side = "long" if sig.action == BUY else "short"
             self.positions[ticker] = {
-                "entry": price, "qty": qty,
+                "side": side, "entry": price, "qty": qty,
                 "stop": getattr(sig, "stop", None),
                 "target": getattr(sig, "target", None),
             }
-            slog.log_event("paper_entry", strategy=self.name, ticker=ticker,
+            slog.log_event("paper_entry", strategy=self.name, ticker=ticker, side=side,
                            price=price, stop=getattr(sig, "stop", None),
                            target=getattr(sig, "target", None))
 
