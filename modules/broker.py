@@ -102,7 +102,12 @@ class Broker:
             logger.info(f"Cancelled order {order_id}")
             return True
         except Exception as exc:
-            logger.error(f"cancel failed ({order_id}): {exc}")
+            msg = str(exc)
+            if "42210000" in msg or "already in" in msg:
+                # Order already filled/closed — cancelling it is a harmless no-op.
+                logger.debug(f"cancel skipped ({order_id}): already filled/closed")
+            else:
+                logger.error(f"cancel failed ({order_id}): {exc}")
             return False
         finally:
             self._pending.pop(order_id, None)
@@ -122,7 +127,12 @@ class Broker:
         """Return average fill price if the order is filled, else None."""
         try:
             order = self._client.get_order_by_id(order_id)
-            return float(order.filled_avg_price) if order.filled_avg_price else None
+            price = float(order.filled_avg_price) if order.filled_avg_price else None
+            if price is not None:
+                # Filled — stop tracking it so cancel_stale never tries to cancel a
+                # filled order (which Alpaca rejects with code 42210000).
+                self._pending.pop(order_id, None)
+            return price
         except Exception as exc:
             logger.error(f"fill_price error ({order_id}): {exc}")
             return None
