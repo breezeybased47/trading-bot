@@ -33,6 +33,8 @@ from modules.correlation_monitor import CorrelationMonitor
 from modules import dashboard_state
 from modules.dashboard import render
 from modules.data_feed import DataFeed
+from modules.economic_calendar import EconomicCalendar
+from modules import leverage_guard
 from modules.indicators import compute, latest as ind_latest
 from modules.latency_monitor import LatencyMonitor
 from modules.liquidity_guard import LiquidityGuard
@@ -77,6 +79,7 @@ class Bot:
         self.cooldowns   = CooldownManager()
         self.scaler      = ScalingManager()
         self.premarket   = PremarketScanner(self.feed.hist_client, self.feed.get_latest_price)
+        self.econ        = EconomicCalendar()   # course module: FOMC/CPI/jobs blackout
         self.shadow      = ShadowEngine()
         self.latency     = LatencyMonitor()
         self.ml          = MLFilter()
@@ -191,10 +194,22 @@ class Bot:
                 return None
             pm_mult = self.premarket.size_mult(ticker)
 
+        # Economic event guard (FOMC / CPI / jobs) — course module
+        econ = self.econ.check_entry(ticker)
+        if not econ["allow"]:
+            logger.info("BUY blocked (%s): %s", ticker, econ["reason"])
+            return None
+
         # Regime master switch
         rd = self.regime.entry_decision(ticker)
         if not rd["allow"]:
             logger.info("BUY blocked (%s): %s", ticker, rd["reason"])
+            return None
+
+        # Leveraged-ETF path-dependency guard — course module
+        lev = leverage_guard.check_entry(ticker, rd["regime"])
+        if not lev["allow"]:
+            logger.info("BUY blocked (%s): %s", ticker, lev["reason"])
             return None
 
         # Correlation guard
@@ -218,7 +233,7 @@ class Bot:
 
         # Sizing — default 'fixed' uses the existing risk.size (behavior-preserving);
         # vol_adjusted / kelly opt into the position_sizer (and its 25% total cap).
-        size_mult = rd["size_mult"] * pm_mult
+        size_mult = rd["size_mult"] * pm_mult * econ["size_mult"]
         if config.SIZING_MODEL == "fixed":
             qty = max(0, int(self.risk.size(price) * size_mult))
             model_used, size_reason = "fixed", "fixed 10%% x mult %.2f" % size_mult
@@ -383,12 +398,15 @@ class Bot:
                    "enabled": config.ML_FILTER_ENABLED},
             "slippage": liquidity_guard.slippage_summary(),
             "premarket": self.premarket.briefing,
+            "econ": self.econ.dashboard(),
             "degraded_feed": getattr(self.feed, "degraded", False),
             "toggles": {k: getattr(config, k) for k in (
                 "REGIME_FILTER_ENABLED", "CORRELATION_GUARD_ENABLED",
                 "LIQUIDITY_GUARD_ENABLED", "ADAPTIVE_COOLDOWN_ENABLED",
                 "SCALING_ENABLED", "PREMARKET_SCANNER_ENABLED",
-                "ML_FILTER_ENABLED", "SHADOW_ENABLED", "SIZING_MODEL")},
+                "ML_FILTER_ENABLED", "SHADOW_ENABLED",
+                "ECON_GUARD_ENABLED", "LEVERAGED_ETF_REGIME_GUARD_ENABLED",
+                "SIZING_MODEL")},
         }
 
     async def _run_dashboard(self):

@@ -183,3 +183,28 @@ LATENCY_P95_ALERT_MS           = 1500   # alert if round-trip p95 exceeds this
 LATENCY_WIDEN_EXIT_ON_DEGRADE  = True   # slow bot = less twitchy exits
 LATENCY_EXIT_WIDEN_MULT        = 1.5    # widen exit thresholds by this when degraded
 LATENCY_LOG_FILE               = "data/latency.jsonl"
+
+
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  COURSE-DERIVED MODULES  (from the user's risk-management course)          ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
+# ─── Economic event guard (FOMC / CPI / jobs reports) ─────────────────────────
+# Course lessons: economic reports, economic calendar, FOMC, inflation.
+ECON_GUARD_ENABLED         = False     # pause/reduce trading around major econ events
+ECON_BLACKOUT_BEFORE_MIN   = 15        # blackout starts N min before an event
+ECON_BLACKOUT_AFTER_MIN    = 30        # ...and ends N min after a standard release
+ECON_FOMC_AFTER_MIN        = 90        # FOMC gets a longer tail (statement + press conf)
+ECON_CAUTION_BUFFER_MIN    = 60        # within this window before a blackout -> half size
+ECON_AUTO_NFP              = True      # auto-add monthly jobs report (1st Friday, 8:30 ET)
+ECON_CPI_DAY               = 0         # day-of-month for CPI 8:30 ET release (0 = off; e.g. 12)
+ECON_EVENTS = [                        # high-impact events — paste from a FREE econ calendar
+    # ("2026-06-18 14:00", "FOMC", "high"),
+    # ("2026-07-15 08:30", "CPI",  "high"),
+]
+
+# ─── Leveraged-ETF path-dependency guard ──────────────────────────────────────
+# Course lessons: leverage ETFs, path dependencies. TQQQ/SQQQ decay in chop due to
+# daily rebalancing, so don't hold them when the market isn't cleanly trending.
+LEVERAGED_ETF_REGIME_GUARD_ENABLED = False
+LEVERAGED_ETF_BAD_REGIMES = ["CHOPPY", "VOLATILE_UP", "VOLATILE_DOWN"]

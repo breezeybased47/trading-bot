@@ -35,6 +35,8 @@ def _default_toggles_off():
     config.ADAPTIVE_COOLDOWN_ENABLED = False
     config.PREMARKET_SCANNER_ENABLED = False
     config.ML_FILTER_ENABLED = False
+    config.ECON_GUARD_ENABLED = False
+    config.LEVERAGED_ETF_REGIME_GUARD_ENABLED = False
     config.SIZING_MODEL = "fixed"
 
 
