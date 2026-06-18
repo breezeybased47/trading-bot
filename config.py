@@ -214,6 +214,15 @@ LEVERAGED_ETF_BAD_REGIMES = ["CHOPPY", "VOLATILE_UP", "VOLATILE_DOWN"]
 # them against the live champion. Standard interpretations — tune to the course.
 PAPER_ENGINE_ENABLED   = True       # run independent strategies in paper (no orders)
 PAPER_POSITION_DOLLARS = 10000      # notional per paper trade (fair P&L comparison)
-REVERSAL_RSI_TURN      = 5.0        # RSI must recover this much above the low -> stage 2
-REVERSAL_TARGET_R      = 2.0        # profit target = R-multiple of the risk
+# Reversal = the course's actual "3 stages": rejection (lower lows) -> consolidation
+# (tight parallel range) -> CONFIRMATION = break above the range's resistance, then a
+# pullback that HOLDS the old resistance as new support (must not sell back off).
+REVERSAL_LOOKBACK          = 20     # bars in the consolidation window
+REVERSAL_RANGE_MAX_PCT     = 0.03   # range must be <= this fraction of price to be "tight"
+REVERSAL_REJECTION_MIN_PCT = 0.02   # must have sold off >= this into the range (the rejection)
+REVERSAL_BREAKOUT_BUFFER   = 0.001  # close must clear the resistance by this fraction
+REVERSAL_RETEST_TOL        = 0.003  # retest low within this fraction above old resistance
+REVERSAL_RETEST_MAX_BARS   = 20     # give up waiting for the retest after N bars
+REVERSAL_STOP_BUFFER       = 0.003  # stop just below the new support (old resistance)
+REVERSAL_TARGET_R          = 2.0    # profit target = R-multiple (not specified by course; default)
 CONFIRMATION_MAX_BARS  = 2          # wait up to N bars for confirmation, else skip

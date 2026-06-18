@@ -31,33 +31,59 @@ def _frame(closes):
                          "close": closes, "volume": 1000.0, "vwap": closes}, index=idx)
 
 
+def _ohlc(rows):
+    closes = [r[0] for r in rows]
+    highs = [r[1] for r in rows]
+    lows = [r[2] for r in rows]
+    idx = pd.date_range("2026-01-02 09:30", periods=len(rows), freq="1min", tz="America/New_York")
+    return pd.DataFrame({"open": closes, "high": highs, "low": lows, "close": closes,
+                         "volume": 1000.0, "vwap": closes}, index=idx)
+
+
+def _flat(c):
+    return (c, c + 0.1, c - 0.1)
+
+
 class TestReversalStrategy(unittest.TestCase):
-    def _run(self, closes):
-        frame = _frame(closes)
+    def _run(self, rows):
+        frame = _ohlc(rows)
         strat = ReversalStrategy()
         sigs = []
-        for i in range(config.MIN_CANDLES, len(frame) + 1):
+        for i in range(42, len(frame) + 1):          # strategy needs >= 2*lookback+2 bars
             s = strat.evaluate("X", frame.iloc[:i])
             if s:
                 sigs.append(s)
         return sigs
 
-    def test_fires_buy_on_v_reversal(self):
-        # steady decline into oversold, then a sharp V recovery that reclaims the 9-EMA
-        closes = list(np.linspace(100, 80, 58)) + list(np.linspace(80.3, 93, 18))
-        sigs = self._run(closes)
-        buys = [s for s in sigs if s.action == BUY]
-        self.assertTrue(buys, "expected a reversal BUY on the recovery")
+    def _base(self):
+        rows = [_flat(c) for c in np.linspace(100, 92.5, 22)]           # rejection (lower lows)
+        for i in range(22):                                            # tight consolidation ~91.2/92.3
+            rows.append(_flat(92.3 if i % 2 else 91.2))
+        rows.append((93.5, 93.6, 93.3))                                # breakout above ~92.4
+        rows += [_flat(c) for c in (93.8, 93.9, 93.7)]                 # holds above the breakout
+        return rows
+
+    def test_fires_on_break_and_retest(self):
+        rows = self._base()
+        rows.append((92.7, 93.0, 92.5))     # pullback taps old resistance (~92.4) and holds
+        rows.append((93.0, 93.2, 92.7))     # turns back up -> ENTRY
+        buys = [s for s in self._run(rows) if s.action == BUY]
+        self.assertTrue(buys, "expected a break-and-retest BUY")
         b = buys[0]
         self.assertEqual(b.strategy, "reversal")
-        self.assertLess(b.stop, b.price)             # stop below entry
-        if b.target is not None:
-            self.assertGreater(b.target, b.price)    # target above entry
+        self.assertLess(b.stop, b.price)            # stop below new support
+        self.assertGreater(b.target, b.price)       # 2R target above entry
 
-    def test_no_buy_on_continued_decline(self):
-        closes = list(np.linspace(100, 70, 76))      # never recovers
-        buys = [s for s in self._run(closes) if s.action == BUY]
+    def test_no_entry_if_breakout_fails(self):
+        rows = self._base()
+        rows.append((91.5, 91.7, 91.3))     # sells back off below the breakout -> setup voided
+        rows.append((91.6, 91.8, 91.4))
+        buys = [s for s in self._run(rows) if s.action == BUY]
         self.assertEqual(buys, [])
+
+    def test_no_entry_on_pure_decline(self):
+        rows = [_flat(c) for c in np.linspace(100, 70, 60)]   # never consolidates/reverses
+        self.assertEqual([s for s in self._run(rows) if s.action == BUY], [])
 
 
 class TestConfirmationOverlay(unittest.TestCase):

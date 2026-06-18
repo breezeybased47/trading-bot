@@ -1,28 +1,37 @@
 """
 reversal_strategy.py  —  Course entry setup: "3 Stages of a Reversal".
 
-This is a STANDARD technical-analysis interpretation of a common concept (not a
-claim about the user's specific course — tune the thresholds to match it). It is
-run as a PAPER challenger (no real orders) so it can be A/B-tested against the
-live strategy before it's ever trusted.
+Faithful to the course lesson (a common, public break-and-retest concept). Pure
+price structure — no indicators:
 
-Bullish reversal state machine (mirror the logic for shorts):
-  Stage 1 — Exhaustion: RSI < oversold while price makes a fresh low. The
-            down-move is overextended (capitulation).
-  Stage 2 — Base: RSI turns back up by REVERSAL_RSI_TURN (momentum divergence)
-            and price holds a HIGHER low than the exhaustion low.
-  Stage 3 — Breakout = BUY: price closes back above the 9-EMA (reclaim).
-  Stop   = the stage-2 base low. Target = REVERSAL_TARGET_R x risk (default 2R).
-  Invalidation: a new low below the exhaustion low resets the whole setup.
+  Stage 1 — REJECTION:     price sells off making lower lows (a prior high sits
+                           well above the area it later settles into).
+  Stage 2 — CONSOLIDATION: it stops dropping and trades a TIGHT range with a
+                           roughly parallel support and resistance.
+  Stage 3 — CONFIRMATION = ENTRY: price BREAKS above the range's resistance, then
+                           PULLS BACK and the old resistance HOLDS as new support
+                           (the key rule: it must NOT sell back off into the
+                           range), and turns back up.
 
-Reuses indicators.compute/latest and strategy.Signal — no forked logic.
+  Stop  = just below the new support (the broken resistance).
+  Target = REVERSAL_TARGET_R x risk (the course doesn't specify a target — this
+           is a sensible default; tune it).
+
+NOTE the course teaches this on DAILY/SWING charts; here it runs on the bot's
+1-minute intraday bars, so it detects intraday break-and-retests (a faster cousin
+of the daily setup). Run as a PAPER challenger — never sends real orders.
 """
 
 import logging
 from typing import Dict, Optional
 
-from config import MIN_CANDLES, REVERSAL_RSI_TURN, REVERSAL_TARGET_R, RSI_OVERSOLD
-from modules.indicators import compute, latest
+import numpy as np
+
+from config import (
+    REVERSAL_LOOKBACK, REVERSAL_RANGE_MAX_PCT, REVERSAL_REJECTION_MIN_PCT,
+    REVERSAL_BREAKOUT_BUFFER, REVERSAL_RETEST_TOL, REVERSAL_RETEST_MAX_BARS,
+    REVERSAL_STOP_BUFFER, REVERSAL_TARGET_R,
+)
 from modules.strategy import BUY, Signal
 
 logger = logging.getLogger(__name__)
@@ -33,56 +42,72 @@ class ReversalStrategy:
         self._st: Dict[str, dict] = {}
 
     def _reset(self, ticker: str):
-        self._st[ticker] = {"stage": 0, "cap_low": None, "cap_rsi": None, "base_low": None}
+        self._st[ticker] = {"stage": 0, "res": None, "sup": None,
+                            "broke": None, "age": 0, "retested": False}
 
     def stage(self, ticker: str) -> int:
         return self._st.get(ticker, {}).get("stage", 0)
 
     def evaluate(self, ticker: str, candles) -> Optional[Signal]:
-        if candles is None or len(candles) < MIN_CANDLES:
-            return None
-        df = compute(candles)
-        if df is None:
-            return None
-        v = latest(df)
-        rsi, ema9, price = v.get("rsi"), v.get("ema9"), v.get("price")
-        if rsi is None or price is None:
+        L = REVERSAL_LOOKBACK
+        if candles is None or len(candles) < 2 * L + 2:
             return None
         try:
-            low = float(candles["low"].iloc[-1])
+            highs = candles["high"].to_numpy(dtype=float)
+            lows = candles["low"].to_numpy(dtype=float)
+            closes = candles["close"].to_numpy(dtype=float)
         except Exception:
             return None
 
-        st = self._st.setdefault(ticker, {"stage": 0, "cap_low": None, "cap_rsi": None, "base_low": None})
-
-        # Stage 1 — exhaustion: oversold while making a fresh low
-        if rsi < RSI_OVERSOLD:
-            if st["cap_low"] is None or low < st["cap_low"]:
-                self._st[ticker] = {"stage": 1, "cap_low": low, "cap_rsi": rsi, "base_low": None}
+        price = float(closes[-1])
+        prev_close = float(closes[-2])
+        low = float(lows[-1])
+        if price <= 0:
             return None
 
-        if st["stage"] >= 1:
-            # invalidation — a new low under the capitulation low kills the setup
-            if st["cap_low"] is not None and low < st["cap_low"]:
+        # The consolidation window = the L bars BEFORE the current bar (so the
+        # current breakout bar never inflates the resistance it must clear).
+        res = float(highs[-(L + 1):-1].max())
+        sup = float(lows[-(L + 1):-1].min())
+        pre_hi = float(highs[-(2 * L + 1):-(L + 1)].max())   # the pre-consolidation high
+        rejected = res > 0 and (pre_hi - res) / res >= REVERSAL_REJECTION_MIN_PCT
+        range_pct = (res - sup) / price if price > 0 else 1.0
+
+        st = self._st.setdefault(ticker, {"stage": 0, "res": None, "sup": None,
+                                          "broke": None, "age": 0, "retested": False})
+
+        # Stages 1-2 — find a tight consolidation that followed a rejection, then a breakout.
+        if st["stage"] in (0, 1):
+            if range_pct <= REVERSAL_RANGE_MAX_PCT and rejected:
+                st["stage"] = 1
+                st["res"], st["sup"] = res, sup
+            if st["stage"] == 1 and price > st["res"] * (1 + REVERSAL_BREAKOUT_BUFFER):
+                st["stage"] = 2
+                st["broke"] = st["res"]
+                st["age"] = 0
+                st["retested"] = False
+            return None
+
+        # Stage 3 — await the pullback that holds the old resistance, then turns up.
+        if st["stage"] == 2:
+            st["age"] += 1
+            broke = st["broke"]
+            if price < broke:                              # failed breakout — sold back off
                 self._reset(ticker)
                 return None
-
-            # Stage 2 — RSI turned up (divergence) -> we're basing on a higher low
-            if st["stage"] == 1 and st["cap_rsi"] is not None and rsi >= st["cap_rsi"] + REVERSAL_RSI_TURN:
-                st["stage"] = 2
-                st["base_low"] = low
-            elif st["stage"] == 2:
-                st["base_low"] = min(st["base_low"], low) if st["base_low"] is not None else low
-
-            # Stage 3 — breakout: reclaim the 9-EMA -> BUY
-            if st["stage"] == 2 and ema9 is not None and price > ema9:
-                stop = st["base_low"] if st["base_low"] is not None else st["cap_low"]
-                risk = price - stop if stop is not None else 0.0
-                target = price + REVERSAL_TARGET_R * risk if risk > 0 else None
+            if st["age"] > REVERSAL_RETEST_MAX_BARS:        # never came back to retest
+                self._reset(ticker)
+                return None
+            if low <= broke * (1 + REVERSAL_RETEST_TOL):    # pulled back and tapped old resistance
+                st["retested"] = True
+            if st["retested"] and price > broke and price >= prev_close:   # held + turning up = ENTRY
+                stop = round(broke * (1 - REVERSAL_STOP_BUFFER), 2)
+                risk = price - stop
+                target = round(price + REVERSAL_TARGET_R * risk, 2) if risk > 0 else None
                 sig = Signal(ticker, BUY, "reversal",
-                             "3-stage reversal: reclaimed 9-EMA off a higher low", price)
-                sig.stop = round(stop, 2) if stop is not None else None
-                sig.target = round(target, 2) if target is not None else None
+                             "break + retest hold (old resistance -> new support)", price)
+                sig.stop = stop
+                sig.target = target
                 self._reset(ticker)
                 return sig
 

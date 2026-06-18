@@ -21,8 +21,8 @@ captures · ❓ needs the exact rules from you.
 | Inflation reports (CPI) | CPI moves everything | 🆕 set `ECON_CPI_DAY` (or paste into `ECON_EVENTS`) |
 | Leverage ETFs · path dependencies | 3x ETFs decay in chop | 🆕 `leverage_guard.py` (`LEVERAGED_ETF_REGIME_GUARD_ENABLED`) — no TQQQ/SQQQ in CHOPPY/VOLATILE |
 | Introduction to ETFs & the risk | ETF mechanics/risk | ✅ ETF rotation logic + the new leverage guard |
-| Waiting for confirmation | Don't anticipate | ❓ can add a "confirmation" entry mode — needs your exact rule |
-| 3 stages of a reversal | A reversal setup | ❓ a new entry strategy — needs the exact mechanical rules |
+| Waiting for confirmation | Don't anticipate | 🆕 `confirmation.py` overlay + baked into the reversal's break-and-retest (paper challenger) |
+| 3 stages of a reversal | Break-and-retest entry | 🆕 `reversal_strategy.py` — rejection → consolidation → break of resistance + retest hold = BUY (paper challenger) |
 | Factors that impact stocks | Context awareness | ✅ regime filter + correlation guard tag/measure context |
 | Planning your trades | Trade a plan | 🧠 journal records the plan-context (regime, signals, size) of every trade |
 | Quality trades | Be selective | 🧠 journal report flags low-quality tag combinations to avoid |
@@ -36,16 +36,21 @@ captures · ❓ needs the exact rules from you.
 
 Both default OFF, log every block, and A/B-testable like every other guard.
 
-## ❓ What I still need from you — the entry setups
-Two lessons describe *entry* setups, but I need their exact mechanics to code them (and I'll build them as a **shadow challenger** so they're A/B-tested before going live):
+## 🆕 The entry setups (built from the lesson)
+From the "3 Stages of a Reversal" lesson, now implemented as a **break-and-retest**
+strategy in `reversal_strategy.py`, run as a paper challenger (`reversal`):
 
-**"3 stages of a reversal"** — tell me, concretely:
-- What defines stage 1 / 2 / 3? (e.g. specific candles, a break of a level, a moving-average cross, volume condition?)
-- What's the exact BUY trigger, and what indicators/values?
-- Where's the stop, and where's the target/exit?
+1. **Rejection** — price sells off, lower lows, breaks support.
+2. **Consolidation** — it settles into a tight, roughly-parallel range.
+3. **Confirmation = BUY** — price breaks above the range's resistance, pulls back, and
+   the **old resistance holds as new support** (must not sell back off), then turns up.
+   Stop just below the new support; target = 2R (the lesson didn't specify a target).
 
-**"Waiting for confirmation"** — tell me:
-- Confirmation of *what*, exactly? (a close above a level? a second candle in the same direction? a retest that holds?)
-- How many bars/seconds do you wait, and what cancels the setup?
+**Timeframe caveat:** the lesson is taught on daily/swing charts; the bot runs it on
+1-minute intraday bars (and closes by EOD), so it catches *intraday* break-and-retests
+— a faster cousin of the daily setup. A true daily-swing version would need overnight
+holds, which conflicts with the bot's design and the course's own no-overnight lesson.
 
-Describe these however makes sense — even rough — and I'll turn them into a precise spec, then code.
+**Tuning knobs** (in `config.py`): `REVERSAL_LOOKBACK`, `REVERSAL_RANGE_MAX_PCT`,
+`REVERSAL_REJECTION_MIN_PCT`, `REVERSAL_RETEST_TOL`, `REVERSAL_TARGET_R`. Tell me where
+the course differs (e.g. it uses an SMA filter, a specific range duration) and I'll tune.
