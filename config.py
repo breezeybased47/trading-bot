@@ -38,6 +38,7 @@ RSI_PERIOD   = 14
 RSI_BUY      = 55       # RSI crosses above this → momentum buy signal
 RSI_SELL     = 45       # RSI drops below this  → momentum sell signal
 RSI_OVERSOLD = 30       # RSI below this        → mean reversion buy setup
+RSI_OVERBOUGHT = 70     # RSI above this        → overbought (short-reversal setup)
 MACD_FAST    = 12
 MACD_SLOW    = 26
 MACD_SIGNAL  = 9
@@ -183,3 +184,53 @@ LATENCY_P95_ALERT_MS           = 1500   # alert if round-trip p95 exceeds this
 LATENCY_WIDEN_EXIT_ON_DEGRADE  = True   # slow bot = less twitchy exits
 LATENCY_EXIT_WIDEN_MULT        = 1.5    # widen exit thresholds by this when degraded
 LATENCY_LOG_FILE               = "data/latency.jsonl"
+
+
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  COURSE-DERIVED MODULES  (from the user's risk-management course)          ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+
+# ─── Economic event guard (FOMC / CPI / jobs reports) ─────────────────────────
+# Course lessons: economic reports, economic calendar, FOMC, inflation.
+ECON_GUARD_ENABLED         = False     # pause/reduce trading around major econ events
+ECON_BLACKOUT_BEFORE_MIN   = 15        # blackout starts N min before an event
+ECON_BLACKOUT_AFTER_MIN    = 30        # ...and ends N min after a standard release
+ECON_FOMC_AFTER_MIN        = 90        # FOMC gets a longer tail (statement + press conf)
+ECON_CAUTION_BUFFER_MIN    = 60        # within this window before a blackout -> half size
+ECON_AUTO_NFP              = True      # auto-add monthly jobs report (1st Friday, 8:30 ET)
+ECON_CPI_DAY               = 0         # day-of-month for CPI 8:30 ET release (0 = off; e.g. 12)
+ECON_EVENTS = [                        # high-impact events — paste from a FREE econ calendar
+    # ("2026-06-18 14:00", "FOMC", "high"),
+    # ("2026-07-15 08:30", "CPI",  "high"),
+]
+
+# ─── Leveraged-ETF path-dependency guard ──────────────────────────────────────
+# Course lessons: leverage ETFs, path dependencies. TQQQ/SQQQ decay in chop due to
+# daily rebalancing, so don't hold them when the market isn't cleanly trending.
+LEVERAGED_ETF_REGIME_GUARD_ENABLED = False
+LEVERAGED_ETF_BAD_REGIMES = ["CHOPPY", "VOLATILE_UP", "VOLATILE_DOWN"]
+
+# ─── Course entry setups: 3-stage reversal + confirmation (PAPER challengers) ──
+# These run as independent paper strategies (NO real orders) so we can A/B test
+# them against the live champion. Standard interpretations — tune to the course.
+PAPER_ENGINE_ENABLED   = True       # run independent strategies in paper (no orders)
+PAPER_POSITION_DOLLARS = 10000      # notional per paper trade (fair P&L comparison)
+# Reversal = the course's actual "3 stages": rejection (lower lows) -> consolidation
+# (tight parallel range) -> CONFIRMATION = break above the range's resistance, then a
+# pullback that HOLDS the old resistance as new support (must not sell back off).
+REVERSAL_LOOKBACK          = 20     # bars in the consolidation window
+REVERSAL_RANGE_MAX_PCT     = 0.03   # range must be <= this fraction of price to be "tight"
+REVERSAL_REJECTION_MIN_PCT = 0.02   # must have sold off >= this into the range (the rejection)
+REVERSAL_BREAKOUT_BUFFER   = 0.001  # close must clear the resistance by this fraction
+REVERSAL_RETEST_TOL        = 0.003  # retest low within this fraction above old resistance
+REVERSAL_RETEST_MAX_BARS   = 20     # give up waiting for the retest after N bars
+REVERSAL_STOP_BUFFER       = 0.003  # stop just below the new support (old resistance)
+REVERSAL_TARGET_R          = 2.0    # profit target = R-multiple (not specified by course; default)
+CONFIRMATION_MAX_BARS  = 2          # wait up to N bars for confirmation, else skip
+
+# Overbought-reversal SHORT ("overbought reversals" lesson). PAPER ONLY — the live
+# bot is long-only; this simulates shorts so the setup can be A/B-studied. (The
+# course's InvestingPro "fair value" data is a paid tool and is NOT integrated.)
+OVERBOUGHT_LOOKBACK    = 10         # bars to remember "was overbought" before the roll-over
+OVERBOUGHT_TARGET_R    = 2.0        # downside target = R-multiple of the risk
+OVERBOUGHT_STOP_BUFFER = 0.003      # stop just above the overbought peak

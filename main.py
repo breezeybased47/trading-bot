@@ -33,12 +33,18 @@ from modules.correlation_monitor import CorrelationMonitor
 from modules import dashboard_state
 from modules.dashboard import render
 from modules.data_feed import DataFeed
+from modules.economic_calendar import EconomicCalendar
+from modules import leverage_guard
 from modules.indicators import compute, latest as ind_latest
 from modules.latency_monitor import LatencyMonitor
 from modules.liquidity_guard import LiquidityGuard
 from modules.ml_filter import MLFilter
 from modules.position_sizer import PositionSizer
 from modules.premarket_scanner import PremarketScanner
+from modules.reversal_strategy import ReversalStrategy
+from modules.overbought_reversal import OverboughtReversalStrategy
+from modules.confirmation import ConfirmationOverlay
+from modules.paper_engine import PaperEngine, PaperBook
 from modules.regime_filter import RegimeFilter
 from modules.risk_manager import RiskManager
 from modules.scaling import ScalingManager
@@ -77,9 +83,17 @@ class Bot:
         self.cooldowns   = CooldownManager()
         self.scaler      = ScalingManager()
         self.premarket   = PremarketScanner(self.feed.hist_client, self.feed.get_latest_price)
+        self.econ        = EconomicCalendar()   # course module: FOMC/CPI/jobs blackout
         self.shadow      = ShadowEngine()
         self.latency     = LatencyMonitor()
         self.ml          = MLFilter()
+        # Course entry setups run as PAPER challengers (no real orders), A/B vs champion
+        self.paper       = PaperEngine([
+            PaperBook("reversal", ReversalStrategy(), config.PAPER_POSITION_DOLLARS),
+            PaperBook("champ_confirmed", ConfirmationOverlay(StrategyEngine(self.feed)),
+                      config.PAPER_POSITION_DOLLARS),
+            PaperBook("overbought_short", OverboughtReversalStrategy(), config.PAPER_POSITION_DOLLARS),
+        ])
         self._shadow_on  = config.SHADOW_ENABLED or config.RESEARCH_MODE
 
         # Per-position bookkeeping for the research layer
@@ -108,6 +122,9 @@ class Bot:
 
         # Re-classify the market on its own 5-minute cadence (cheap, self-throttled)
         self.regime.reclassify_if_due()
+
+        # Paper challengers — independent strategies, NO real orders (course A/B test)
+        self.paper.on_bar(ticker, candles)
 
         # Daily pre-market scan (only when enabled)
         if config.PREMARKET_SCANNER_ENABLED:
@@ -191,10 +208,22 @@ class Bot:
                 return None
             pm_mult = self.premarket.size_mult(ticker)
 
+        # Economic event guard (FOMC / CPI / jobs) — course module
+        econ = self.econ.check_entry(ticker)
+        if not econ["allow"]:
+            logger.info("BUY blocked (%s): %s", ticker, econ["reason"])
+            return None
+
         # Regime master switch
         rd = self.regime.entry_decision(ticker)
         if not rd["allow"]:
             logger.info("BUY blocked (%s): %s", ticker, rd["reason"])
+            return None
+
+        # Leveraged-ETF path-dependency guard — course module
+        lev = leverage_guard.check_entry(ticker, rd["regime"])
+        if not lev["allow"]:
+            logger.info("BUY blocked (%s): %s", ticker, lev["reason"])
             return None
 
         # Correlation guard
@@ -218,7 +247,7 @@ class Bot:
 
         # Sizing — default 'fixed' uses the existing risk.size (behavior-preserving);
         # vol_adjusted / kelly opt into the position_sizer (and its 25% total cap).
-        size_mult = rd["size_mult"] * pm_mult
+        size_mult = rd["size_mult"] * pm_mult * econ["size_mult"]
         if config.SIZING_MODEL == "fixed":
             qty = max(0, int(self.risk.size(price) * size_mult))
             model_used, size_reason = "fixed", "fixed 10%% x mult %.2f" % size_mult
@@ -370,6 +399,8 @@ class Bot:
 
     def _research_snapshot(self) -> dict:
         """Gather live research-module state for the web dashboard bridge."""
+        challengers = self.shadow.comparison()
+        challengers.update(self.paper.comparison())   # reversal + champ_confirmed paper books
         return {
             "regime": self.regime.status(),
             "cooldowns": self.cooldowns.status(),
@@ -383,12 +414,15 @@ class Bot:
                    "enabled": config.ML_FILTER_ENABLED},
             "slippage": liquidity_guard.slippage_summary(),
             "premarket": self.premarket.briefing,
+            "econ": self.econ.dashboard(),
             "degraded_feed": getattr(self.feed, "degraded", False),
             "toggles": {k: getattr(config, k) for k in (
                 "REGIME_FILTER_ENABLED", "CORRELATION_GUARD_ENABLED",
                 "LIQUIDITY_GUARD_ENABLED", "ADAPTIVE_COOLDOWN_ENABLED",
                 "SCALING_ENABLED", "PREMARKET_SCANNER_ENABLED",
-                "ML_FILTER_ENABLED", "SHADOW_ENABLED", "SIZING_MODEL")},
+                "ML_FILTER_ENABLED", "SHADOW_ENABLED",
+                "ECON_GUARD_ENABLED", "LEVERAGED_ETF_REGIME_GUARD_ENABLED",
+                "SIZING_MODEL")},
         }
 
     async def _run_dashboard(self):
