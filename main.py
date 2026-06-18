@@ -30,6 +30,7 @@ from modules.alerts import daily_limit_hit, stop_hit, trade_closed, trade_opened
 from modules.broker import Broker
 from modules.cooldowns import CooldownManager
 from modules.correlation_monitor import CorrelationMonitor
+from modules import dashboard_state
 from modules.dashboard import render
 from modules.data_feed import DataFeed
 from modules.indicators import compute, latest as ind_latest
@@ -367,9 +368,36 @@ class Bot:
 
     # ── Dashboard loop (async) ────────────────────────────────────────────────
 
+    def _research_snapshot(self) -> dict:
+        """Gather live research-module state for the web dashboard bridge."""
+        return {
+            "regime": self.regime.status(),
+            "cooldowns": self.cooldowns.status(),
+            "correlation": self.correlation.heatmap_data(),
+            "shadow": {"comparison": self.shadow.comparison(),
+                       "recommendations": self.shadow.recommendation()},
+            "latency": {**self.latency.percentiles(),
+                        "degraded": self.latency.is_degraded(),
+                        "exit_mult": self.latency.exit_threshold_multiplier()},
+            "ml": {"calibration": self.ml.calibration(),
+                   "enabled": config.ML_FILTER_ENABLED},
+            "slippage": liquidity_guard.slippage_summary(),
+            "premarket": self.premarket.briefing,
+            "degraded_feed": getattr(self.feed, "degraded", False),
+            "toggles": {k: getattr(config, k) for k in (
+                "REGIME_FILTER_ENABLED", "CORRELATION_GUARD_ENABLED",
+                "LIQUIDITY_GUARD_ENABLED", "ADAPTIVE_COOLDOWN_ENABLED",
+                "SCALING_ENABLED", "PREMARKET_SCANNER_ENABLED",
+                "ML_FILTER_ENABLED", "SHADOW_ENABLED", "SIZING_MODEL")},
+        }
+
     async def _run_dashboard(self):
         with Live(refresh_per_second=1, screen=True) as live:
             while self.running:
+                try:
+                    dashboard_state.update(**self._research_snapshot())
+                except Exception as exc:
+                    logger.debug("dashboard snapshot failed: %s", exc)
                 panel = render(
                     positions=self.risk.positions,
                     portfolio=self.broker.portfolio_value(),

@@ -127,16 +127,21 @@ class RegimeFilter:
         return snapshot
 
     def status(self) -> dict:
-        """Live status for the dashboard."""
+        """Live status for the dashboard (READ-ONLY — never logs, so it's safe
+        to poll on the 2s dashboard refresh)."""
         regime = self._regime
-        decision = self.entry_decision("*", regime)
+        stats = journal.regime_stats().get(regime, {})
+        sample = int(stats.get("n", 0))
+        expectancy = float(stats.get("expectancy", 0.0))
+        blocked = (config.REGIME_FILTER_ENABLED
+                   and sample >= config.REGIME_MIN_SAMPLE
+                   and expectancy < config.REGIME_MIN_EXPECTANCY)
         return {
             "regime": regime,
             "detail": self._detail,
-            "blocked": (not decision["allow"]),
-            "reason": decision["reason"],
-            "expectancy": decision["expectancy"],
-            "sample": decision["sample"],
+            "blocked": blocked,
+            "expectancy": expectancy,
+            "sample": sample,
             "enabled": config.REGIME_FILTER_ENABLED,
         }
 

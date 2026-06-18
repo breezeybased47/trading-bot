@@ -12,6 +12,7 @@ import pytz
 from flask import Flask, render_template_string
 
 from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING
+from modules import dashboard_state
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
@@ -133,6 +134,109 @@ TEMPLATE = """<!DOCTYPE html>
     </tbody>
   </table>
 </section>
+
+{% if research %}
+<section>
+  <h2>Research Modules {% if research.updated %}<span style="color:#333">· updated {{ research.updated }}</span>{% endif %}</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:7px">
+    {% for k, v in (research.toggles or {}).items() %}
+      <span style="padding:4px 11px;border-radius:14px;font-size:10px;font-weight:600;border:1px solid #1e1e1e;
+        background:{% if v and v != 'fixed' %}#0f2e0f{% else %}#161616{% endif %};
+        color:{% if v and v != 'fixed' %}#4ade80{% else %}#555{% endif %}">
+        {{ k.replace('_ENABLED','').replace('_',' ')|lower }}{% if v in ['fixed','vol_adjusted','kelly'] %}: {{ v }}{% endif %}
+      </span>
+    {% endfor %}
+  </div>
+  {% if research.degraded_feed %}<div style="color:#fbbf24;font-size:12px;margin-top:8px">⚠️ data feed degraded on this instance (Oracle VM is the streamer)</div>{% endif %}
+</section>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-label">Market Regime</div>
+    <div class="card-value" style="font-size:17px">{{ research.regime.regime if research.regime else '—' }}</div>
+    <div class="sub">{% if research.regime and research.regime.blocked %}<span class="red">⛔ REGIME BLOCKED</span>{% elif research.regime %}exp ${{ "%.2f"|format(research.regime.expectancy) }} · n={{ research.regime.sample }}{% endif %}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Latency p95</div>
+    <div class="card-value" style="font-size:17px">{{ research.latency.p95 if research.latency and research.latency.p95 is not none else '—' }}<span style="font-size:11px;color:#555"> ms</span></div>
+    <div class="sub">{% if research.latency and research.latency.degraded %}<span class="red">degraded → exits x{{ research.latency.exit_mult }}</span>{% else %}p50 {{ research.latency.p50 if research.latency and research.latency.p50 is not none else '—' }}ms{% endif %}</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Avg Slippage</div>
+    <div class="card-value" style="font-size:17px">{% if research.slippage and research.slippage.mean_actual_bps is not none %}{{ research.slippage.mean_actual_bps }}<span style="font-size:11px;color:#555"> bps</span>{% else %}—{% endif %}</div>
+    <div class="sub">{{ research.slippage.n if research.slippage else 0 }} fills measured</div>
+  </div>
+  <div class="card">
+    <div class="card-label">ML Veto Filter</div>
+    <div class="card-value" style="font-size:17px">{% if research.ml and research.ml.enabled %}ON{% else %}<span style="color:#555">off</span>{% endif %}</div>
+    <div class="sub">{% if research.ml and research.ml.calibration and research.ml.calibration.n %}cal pred {{ research.ml.calibration.mean_predicted }} / act {{ research.ml.calibration.mean_actual }}{% else %}inert (needs trades){% endif %}</div>
+  </div>
+</div>
+
+{% if research.cooldowns %}
+<section>
+  <h2>Per-Ticker Heat &amp; Cooldown</h2>
+  <table>
+    <thead><tr><th>Ticker</th><th>Heat</th><th>Cooldown</th><th>Consec Losses</th></tr></thead>
+    <tbody>
+    {% for t, c in research.cooldowns.items() %}
+      <tr>
+        <td class="sym">{{ t }}</td>
+        <td>{{ "%.1f"|format(c.heat) }}</td>
+        <td>{% if c.cooldown_seconds > 0 %}<span class="red">{{ c.cooldown_minutes }}m</span>{% else %}<span style="color:#333">—</span>{% endif %}</td>
+        <td>{{ c.consec_losses }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if research.shadow and research.shadow.comparison %}
+<section>
+  <h2>Champion vs Challengers (hypothetical, paper-logged)</h2>
+  <table>
+    <thead><tr><th>Strategy</th><th>Trades</th><th>Total P&amp;L</th><th>Win %</th><th>Sharpe</th></tr></thead>
+    <tbody>
+    {% for name, s in research.shadow.comparison.items() %}
+      <tr>
+        <td class="sym">{{ 'CHAMPION' if name == 'champion' else name }}</td>
+        <td>{{ s.n }}</td>
+        <td class="{{ 'green' if s.total >= 0 else 'red' }}">${{ "%.2f"|format(s.total) }}</td>
+        <td>{{ "%.0f"|format(s.win_rate * 100) }}%</td>
+        <td>{{ s.sharpe if s.sharpe is not none else '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% for r in research.shadow.recommendations %}<div style="color:#fbbf24;font-size:12px;margin-top:7px">⭐ {{ r }}</div>{% endfor %}
+</section>
+{% endif %}
+
+{% if research.correlation and research.correlation.long %}
+<section>
+  <h2>30-Day Correlation Heatmap</h2>
+  <table style="font-size:11px">
+    <thead><tr><th></th>{% for b in research.correlation.tickers %}<th style="text-align:center">{{ b }}</th>{% endfor %}</tr></thead>
+    <tbody>
+    {% for a in research.correlation.tickers %}
+      <tr>
+        <td class="sym" style="font-size:11px">{{ a }}</td>
+        {% for b in research.correlation.tickers %}
+          {% set v = research.correlation.long.get(a, {}).get(b) %}
+          <td style="text-align:center;color:#ccc;background:
+            {%- if v is none %}#111{% elif a == b %}#262626{% elif v > 0.7 %}#4a1515{% elif v > 0.4 %}#3a2a15{% elif v >= 0 %}#181818{% else %}#15203a{% endif %}">
+            {{ "%.2f"|format(v) if v is not none else '·' }}</td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="sub" style="margin-top:6px">red = high correlation (blocked if &gt;0.70 with an open position)</div>
+</section>
+{% endif %}
+{% endif %}
+
 </body>
 </html>"""
 
@@ -167,6 +271,7 @@ def dashboard():
             paper=PAPER_TRADING,
             now=datetime.now(ET).strftime("%b %d, %Y  %I:%M %p ET"),
             et=ET,
+            research=dashboard_state.snapshot(),
         )
     except Exception as exc:
         logger.error(f"Dashboard error: {exc}")
