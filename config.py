@@ -149,7 +149,7 @@ SCALE_TIER2_SELL_FRAC      = 0.25       # ...sell another 25%, tighten trailing 
 SCALE_TIER2_TRAIL_PCT      = 0.0075     # tighter trailing stop on the final runner
 
 # ─── Module 7 — Pre-market gap & news scanner ─────────────────────────────────
-PREMARKET_SCANNER_ENABLED  = False
+PREMARKET_SCANNER_ENABLED  = True       # ON (2026-06-18): Finnhub key added; pull news/earnings
 PREMARKET_RUN_TIME         = "09:00"    # ET — compute gaps / pull news
 PREMARKET_BRIEFING_TIME    = "09:15"    # ET — post briefing to dashboard + Telegram
 GAP_NOTOUCH_PCT            = 0.04       # gap > 4% + news = NO-TOUCH for the day
