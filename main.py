@@ -426,6 +426,9 @@ class Bot:
         init_log()
         slog.init()
         journal.init()
+        synced = self.risk.sync_from_broker()   # adopt existing account positions so the cap holds
+        if synced:
+            logger.info("Reconciled %d existing account position(s) — cap now accounts for them", synced)
         self.regime.update_performance_snapshot()
         if self._shadow_on:
             self.shadow.start()
