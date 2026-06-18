@@ -109,7 +109,7 @@ CONSEC_LOSS_TRIGGER        = 2          # after N consecutive losses...
 CONSEC_LOSS_SIZE_FACTOR    = 0.5        # ...multiply all sizing by this
 
 # ─── Module 3 — Live correlation matrix ───────────────────────────────────────
-CORRELATION_GUARD_ENABLED  = False
+CORRELATION_GUARD_ENABLED  = True       # ON (combined bot): don't stack correlated names
 CORR_LONG_WINDOW_DAYS      = 30
 CORR_SHORT_WINDOW_DAYS     = 5
 CORR_LONG_BLOCK            = 0.70       # block if 30d corr w/ any open position > this
@@ -118,7 +118,7 @@ CORR_REFRESH_HOUR_ET       = 8          # rebuild matrix at 8am ET daily
 CORR_TQQQ_TECH_RULE        = True       # if TQQQ open, restrict extra long-tech exposure
 
 # ─── Module 4 — Liquidity & market-impact guard (free-tier proxy) ─────────────
-LIQUIDITY_GUARD_ENABLED    = False
+LIQUIDITY_GUARD_ENABLED    = True       # ON (combined bot): skip wide-spread / thin entries
 SPREAD_MAX_BPS_DEFAULT     = 8          # reject entry if spread wider than N basis points
 SPREAD_MAX_BPS_OVERRIDES   = {          # per-ticker (tighter for liquid, looser for ETFs)
     "AAPL": 5, "MSFT": 5, "GOOGL": 6, "AMZN": 6, "META": 6,
@@ -129,7 +129,7 @@ DEPTH_REDUCE_PCT           = 0.05       # reduce size if 5-15% of available dept
 SLIPPAGE_LOG_FILE          = "data/slippage.jsonl"
 
 # ─── Module 5 — Adaptive cooldowns + heat ─────────────────────────────────────
-ADAPTIVE_COOLDOWN_ENABLED  = False      # base bot currently has NO cooldown; opt in
+ADAPTIVE_COOLDOWN_ENABLED  = True       # ON (combined bot): cool down after losses/whipsaws
 COOLDOWN_BASE_MIN          = 15
 COOLDOWN_CLEAN_WIN_MIN     = 7          # exited via signal (not stop)
 COOLDOWN_STOP_LOSS_MIN     = 30         # exited via stop
@@ -141,7 +141,7 @@ HEAT_DECAY_PER_HOUR        = 0.5        # heat bled off per hour
 HEAT_COOLDOWN_MIN_PER_UNIT = 5         # extra cooldown minutes per point of heat
 
 # ─── Module 6 — Partial profit taking / scaling out ───────────────────────────
-SCALING_ENABLED            = False
+SCALING_ENABLED            = True       # ON (combined bot): bank partial profits as winners run
 SCALE_TIER1_TRIGGER_PCT    = 0.015      # +1.5% unrealized...
 SCALE_TIER1_SELL_FRAC      = 0.50       # ...sell 50%, move stop to breakeven on the rest
 SCALE_TIER2_TRIGGER_PCT    = 0.03       # +3% unrealized...
@@ -193,7 +193,7 @@ LATENCY_LOG_FILE               = "data/latency.jsonl"
 
 # ─── Economic event guard (FOMC / CPI / jobs reports) ─────────────────────────
 # Course lessons: economic reports, economic calendar, FOMC, inflation.
-ECON_GUARD_ENABLED         = False     # pause/reduce trading around major econ events
+ECON_GUARD_ENABLED         = True      # ON (combined bot): stand down around FOMC/CPI/jobs
 ECON_BLACKOUT_BEFORE_MIN   = 15        # blackout starts N min before an event
 ECON_BLACKOUT_AFTER_MIN    = 30        # ...and ends N min after a standard release
 ECON_FOMC_AFTER_MIN        = 90        # FOMC gets a longer tail (statement + press conf)
@@ -208,7 +208,7 @@ ECON_EVENTS = [                        # high-impact events — paste from a FRE
 # ─── Leveraged-ETF path-dependency guard ──────────────────────────────────────
 # Course lessons: leverage ETFs, path dependencies. TQQQ/SQQQ decay in chop due to
 # daily rebalancing, so don't hold them when the market isn't cleanly trending.
-LEVERAGED_ETF_REGIME_GUARD_ENABLED = False
+LEVERAGED_ETF_REGIME_GUARD_ENABLED = True   # ON (combined bot): no TQQQ/SQQQ in chop/volatile
 LEVERAGED_ETF_BAD_REGIMES = ["CHOPPY", "VOLATILE_UP", "VOLATILE_DOWN"]
 
 # ─── Course entry setups: 3-stage reversal + confirmation (PAPER challengers) ──
