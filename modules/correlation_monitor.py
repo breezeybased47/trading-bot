@@ -41,8 +41,10 @@ from modules import structured_log as slog
 logger = logging.getLogger(__name__)
 ET = pytz.timezone("America/New_York")
 
-# Long single-name tech = the universe minus the leveraged ETFs (TQQQ/SQQQ).
-LONG_TECH_NAMES = [t for t in config.TICKERS if t not in config.LEVERAGED_ETFS]
+# The actual long single-name tech names (for the "TQQQ open -> restrict long tech" rule).
+# Explicit list so non-tech diversifiers in TICKERS aren't wrongly treated as tech.
+LONG_TECH_NAMES = getattr(config, "TECH_NAMES",
+                          [t for t in config.TICKERS if t not in config.LEVERAGED_ETFS])
 
 
 class CorrelationMonitor:
