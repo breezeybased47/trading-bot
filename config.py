@@ -23,9 +23,14 @@ TICKERS = [
     "TQQQ", "SQQQ",
     "NVDA", "TSLA", "AAPL",
     "MSFT", "META", "GOOGL",
-    "AMD",  "AMZN"
+    "AMD",  "AMZN",
+    # Diversifiers across sectors (added 2026-06-18): banks / energy / healthcare / staples / media / industrials
+    "JPM", "XOM", "UNH", "WMT", "DIS", "CAT",
 ]
 LEVERAGED_ETFS = ["TQQQ", "SQQQ"]
+# The actual tech names — used by the correlation guard's "if TQQQ is open, restrict
+# additional long-tech" rule so the non-tech diversifiers above don't get caught by it.
+TECH_NAMES = ["NVDA", "TSLA", "AAPL", "MSFT", "META", "GOOGL", "AMD", "AMZN"]
 QQQ_TICKER = "QQQ"          # Used for NASDAQ trend detection
 
 # ─── MARKET HOURS (ET) ────────────────────────────────────────────────────────
