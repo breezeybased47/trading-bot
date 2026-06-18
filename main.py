@@ -71,7 +71,10 @@ class Bot:
     def __init__(self):
         self.broker   = Broker()
         self.feed     = DataFeed()
-        self.strategy = StrategyEngine(self.feed)
+        # Live champion — optionally tightened with 'wait for confirmation' on entries
+        # (course lesson; champ_confirmed cut the per-trade loss in the first day's data).
+        _champion     = StrategyEngine(self.feed)
+        self.strategy = ConfirmationOverlay(_champion) if config.CHAMPION_CONFIRMATION else _champion
         self.risk     = RiskManager(self.broker)
         self.running  = False
 

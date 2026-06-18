@@ -35,7 +35,8 @@ LEVERAGED_ETF_CLOSE_TIME = "15:45"  # Force-close all leveraged ETFs by 3:45 PM
 
 # ─── INDICATOR SETTINGS ───────────────────────────────────────────────────────
 RSI_PERIOD   = 14
-RSI_BUY      = 55       # RSI crosses above this → momentum buy signal
+RSI_BUY      = 60       # raised 55→60 (2026-06-18): stricter momentum entry — the rsi60
+                        #   challenger was the only profitable variant in the first day's data
 RSI_SELL     = 45       # RSI drops below this  → momentum sell signal
 RSI_OVERSOLD = 30       # RSI below this        → mean reversion buy setup
 RSI_OVERBOUGHT = 70     # RSI above this        → overbought (short-reversal setup)
@@ -165,7 +166,7 @@ REPORT_MIN_SAMPLE          = 8          # min trades in a tag before flagging it
 # ─── Module 9 — Shadow mode (champion / challenger) ───────────────────────────
 SHADOW_ENABLED             = False      # RESEARCH_MODE also activates this at runtime
 SHADOW_CHALLENGERS = [                   # each overrides champion config; PAPER-LOG ONLY
-    {"name": "rsi60",        "RSI_BUY": 60},
+    {"name": "rsi65",        "RSI_BUY": 65},     # is even stricter better than the new champ (60)?
     {"name": "scaling_on",   "SCALING_ENABLED": True},
     {"name": "regime_on",    "REGIME_FILTER_ENABLED": True},
 ]
@@ -227,6 +228,8 @@ REVERSAL_RETEST_MAX_BARS   = 20     # give up waiting for the retest after N bar
 REVERSAL_STOP_BUFFER       = 0.003  # stop just below the new support (old resistance)
 REVERSAL_TARGET_R          = 2.0    # profit target = R-multiple (not specified by course; default)
 CONFIRMATION_MAX_BARS  = 2          # wait up to N bars for confirmation, else skip
+CHAMPION_CONFIRMATION  = True       # apply 'wait for confirmation' to LIVE champion entries
+                                    #   (enabled 2026-06-18 — champ_confirmed cut the loss in testing)
 
 # Overbought-reversal SHORT ("overbought reversals" lesson). PAPER ONLY — the live
 # bot is long-only; this simulates shorts so the setup can be A/B-studied. (The
