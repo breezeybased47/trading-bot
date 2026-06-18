@@ -41,6 +41,9 @@ from modules.liquidity_guard import LiquidityGuard
 from modules.ml_filter import MLFilter
 from modules.position_sizer import PositionSizer
 from modules.premarket_scanner import PremarketScanner
+from modules.reversal_strategy import ReversalStrategy
+from modules.confirmation import ConfirmationOverlay
+from modules.paper_engine import PaperEngine, PaperBook
 from modules.regime_filter import RegimeFilter
 from modules.risk_manager import RiskManager
 from modules.scaling import ScalingManager
@@ -83,6 +86,12 @@ class Bot:
         self.shadow      = ShadowEngine()
         self.latency     = LatencyMonitor()
         self.ml          = MLFilter()
+        # Course entry setups run as PAPER challengers (no real orders), A/B vs champion
+        self.paper       = PaperEngine([
+            PaperBook("reversal", ReversalStrategy(), config.PAPER_POSITION_DOLLARS),
+            PaperBook("champ_confirmed", ConfirmationOverlay(StrategyEngine(self.feed)),
+                      config.PAPER_POSITION_DOLLARS),
+        ])
         self._shadow_on  = config.SHADOW_ENABLED or config.RESEARCH_MODE
 
         # Per-position bookkeeping for the research layer
@@ -111,6 +120,9 @@ class Bot:
 
         # Re-classify the market on its own 5-minute cadence (cheap, self-throttled)
         self.regime.reclassify_if_due()
+
+        # Paper challengers — independent strategies, NO real orders (course A/B test)
+        self.paper.on_bar(ticker, candles)
 
         # Daily pre-market scan (only when enabled)
         if config.PREMARKET_SCANNER_ENABLED:
@@ -385,6 +397,8 @@ class Bot:
 
     def _research_snapshot(self) -> dict:
         """Gather live research-module state for the web dashboard bridge."""
+        challengers = self.shadow.comparison()
+        challengers.update(self.paper.comparison())   # reversal + champ_confirmed paper books
         return {
             "regime": self.regime.status(),
             "cooldowns": self.cooldowns.status(),

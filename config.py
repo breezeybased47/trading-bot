@@ -208,3 +208,12 @@ ECON_EVENTS = [                        # high-impact events — paste from a FRE
 # daily rebalancing, so don't hold them when the market isn't cleanly trending.
 LEVERAGED_ETF_REGIME_GUARD_ENABLED = False
 LEVERAGED_ETF_BAD_REGIMES = ["CHOPPY", "VOLATILE_UP", "VOLATILE_DOWN"]
+
+# ─── Course entry setups: 3-stage reversal + confirmation (PAPER challengers) ──
+# These run as independent paper strategies (NO real orders) so we can A/B test
+# them against the live champion. Standard interpretations — tune to the course.
+PAPER_ENGINE_ENABLED   = True       # run independent strategies in paper (no orders)
+PAPER_POSITION_DOLLARS = 10000      # notional per paper trade (fair P&L comparison)
+REVERSAL_RSI_TURN      = 5.0        # RSI must recover this much above the low -> stage 2
+REVERSAL_TARGET_R      = 2.0        # profit target = R-multiple of the risk
+CONFIRMATION_MAX_BARS  = 2          # wait up to N bars for confirmation, else skip
