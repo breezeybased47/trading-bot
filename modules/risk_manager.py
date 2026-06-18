@@ -163,6 +163,44 @@ class RiskManager:
 
     # ── Position lifecycle ────────────────────────────────────────────────────
 
+    def sync_from_broker(self) -> int:
+        """
+        Load positions the Alpaca account ALREADY holds into the tracker.
+
+        WHY: on a fresh start self.positions begins empty, but the account may
+        still hold positions from before the restart. Without this, the bot
+        ignores them and can open MAX_OPEN_POSITIONS *more* on top — so the cap
+        silently fails and positions pile up across restarts. Reconciling on
+        startup makes MAX_OPEN_POSITIONS (and the stops) actually hold.
+        Returns the number of positions adopted.
+        """
+        try:
+            existing = self._broker.open_positions()
+        except Exception as exc:
+            logger.error(f"position sync failed: {exc}")
+            return 0
+
+        adopted = 0
+        for p in existing:
+            ticker = p.get("ticker")
+            qty = int(p.get("qty") or 0)
+            if not ticker or ticker in self.positions:
+                continue
+            if qty <= 0:                       # bot only holds longs; skip/flag anything else
+                logger.warning(f"sync: skipping non-long position {ticker} qty={qty}")
+                continue
+            entry = float(p.get("entry") or p.get("current") or 0.0)
+            pos = Position(ticker, entry, qty, "preexisting")
+            if p.get("current"):
+                pos.tick(float(p["current"]))
+            self.positions[ticker] = pos
+            adopted += 1
+
+        if adopted:
+            logger.info(f"Synced {adopted} pre-existing position(s) from broker: "
+                        f"{list(self.positions)}")
+        return adopted
+
     def record_open(self, ticker: str, price: float, qty: int, strategy: str):
         self.positions[ticker] = Position(ticker, price, qty, strategy)
         logger.info(f"Position recorded: {self.positions[ticker]}")
