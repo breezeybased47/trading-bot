@@ -10,10 +10,10 @@ import pandas as pd
 import ta
 from ta.momentum import RSIIndicator
 from ta.trend import MACD, EMAIndicator
-from ta.volatility import BollingerBands
+from ta.volatility import AverageTrueRange, BollingerBands
 
 from config import (
-    BB_PERIOD, BB_STD, EMA_LONG, EMA_MED, EMA_SHORT,
+    ATR_AVG_PERIOD, ATR_PERIOD, BB_PERIOD, BB_STD, EMA_LONG, EMA_MED, EMA_SHORT,
     MACD_FAST, MACD_SIGNAL, MACD_SLOW, RSI_PERIOD,
 )
 
@@ -111,6 +111,46 @@ def nasdaq_is_bearish(qqq_df: pd.DataFrame) -> bool:
     price = row.get("close", 0)
     ema50 = row.get("ema50", 0)
     return bool(price and ema50 and price < ema50)
+
+
+# ── ATR (volatility, in price units) ──────────────────────────────────────────
+
+def atr_series(df: pd.DataFrame, period: int = ATR_PERIOD) -> Optional[pd.Series]:
+    """Average True Range series. Needs > `period` bars of high/low/close."""
+    if df is None or len(df) < period + 1:
+        return None
+    try:
+        a = AverageTrueRange(
+            high=df["high"], low=df["low"], close=df["close"], window=period
+        )
+        return a.average_true_range()
+    except Exception as exc:
+        logger.error(f"ATR compute error: {exc}")
+        return None
+
+
+def atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> Optional[float]:
+    """Latest ATR value (how many dollars a name typically moves per bar)."""
+    series = atr_series(df, period)
+    if series is None or series.dropna().empty:
+        return None
+    return _f(series.iloc[-1])
+
+
+def atr_with_average(
+    df: pd.DataFrame, period: int = ATR_PERIOD, avg_period: int = ATR_AVG_PERIOD
+) -> tuple:
+    """
+    Return (current_atr, atr_moving_average). Module 2's volatility sizing scales
+    inversely to current_atr / atr_moving_average, so a name that is unusually
+    volatile right now is sized down to keep dollar-risk constant.
+    """
+    series = atr_series(df, period)
+    if series is None or series.dropna().empty:
+        return (None, None)
+    cur = _f(series.iloc[-1])
+    avg = _f(series.dropna().tail(avg_period).mean())
+    return (cur, avg)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

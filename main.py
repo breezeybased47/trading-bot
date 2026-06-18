@@ -185,6 +185,13 @@ class Bot:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    # Quick bleed-stop: trim any runaway launchd-redirected log and de-spam logging
+    # before anything starts writing (see modules/log_setup.py and data_feed watchdog).
+    from modules.log_setup import configure_logging, trim_oversized
+    trim_oversized("logs/bot_error.log", max_mb=5)
+    trim_oversized("logs/bot.log", max_mb=5)
+    configure_logging()
+
     bot = Bot()
     signal.signal(signal.SIGINT,  bot.stop)
     signal.signal(signal.SIGTERM, bot.stop)
