@@ -26,6 +26,8 @@ TICKERS = [
     "AMD",  "AMZN",
     # Diversifiers across sectors (added 2026-06-18): banks / energy / healthcare / staples / media / industrials
     "JPM", "XOM", "UNH", "WMT", "DIS", "CAT",
+    # High-profile growth / fintech (added 2026-06-18): brokerage, space, data, crypto, ride-share, travel, commerce, cloud
+    "HOOD", "SPCX", "PLTR", "COIN", "UBER", "ABNB", "SHOP", "NET",
 ]
 LEVERAGED_ETFS = ["TQQQ", "SQQQ"]
 # The actual tech names — used by the correlation guard's "if TQQQ is open, restrict
