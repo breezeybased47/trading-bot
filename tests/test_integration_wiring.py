@@ -23,7 +23,12 @@ config.RESEARCH_MODE = False
 
 import main                                            # noqa: E402
 from modules import journal                            # noqa: E402
-from modules.strategy import Signal, BUY               # noqa: E402
+from modules.strategy import Signal, BUY, SELL         # noqa: E402
+from datetime import datetime, timedelta               # noqa: E402
+from types import SimpleNamespace                       # noqa: E402
+import pytz                                             # noqa: E402
+
+_ET = pytz.timezone("America/New_York")
 
 journal.init()                                         # create the temp journal table
 
@@ -97,6 +102,35 @@ class TestEntryGauntlet(unittest.TestCase):
         config.TRADE_LEVERAGED_ETFS = False
         sig = Signal("TQQQ", BUY, "etf_rotation", "no leveraged trading", 50.0)
         self.assertIsNone(self.b._approve_and_size(sig))
+
+    def test_qqq_indicator_not_traded(self):
+        sig = Signal(config.QQQ_TICKER, BUY, "momentum", "x", 739.0)
+        self.assertIsNone(self.b._approve_and_size(sig))
+
+    def test_profit_target_pct(self):
+        config.TARGET_PROFIT_PCT, config.TARGET_PROFIT_DOLLARS = 0.02, 0
+        self.assertTrue(self.b._profit_target_hit(SimpleNamespace(pnl=0, pnl_pct=0.025)))
+        self.assertFalse(self.b._profit_target_hit(SimpleNamespace(pnl=0, pnl_pct=0.01)))
+
+    def test_profit_target_dollars(self):
+        config.TARGET_PROFIT_PCT, config.TARGET_PROFIT_DOLLARS = 0, 100
+        self.assertTrue(self.b._profit_target_hit(SimpleNamespace(pnl=150, pnl_pct=0.0)))
+        self.assertFalse(self.b._profit_target_hit(SimpleNamespace(pnl=50, pnl_pct=0.0)))
+        config.TARGET_PROFIT_PCT, config.TARGET_PROFIT_DOLLARS = 0.02, 0   # restore
+
+    def test_min_hold_ignores_early_sell(self):
+        config.MIN_HOLD_MINUTES = 10
+        self.b.risk.positions = {"AAPL": SimpleNamespace(opened=datetime.now(_ET))}
+        self.b._close = mock.Mock()
+        self.b._handle_signal(Signal("AAPL", SELL, "momentum", "exit", 100.0))
+        self.b._close.assert_not_called()          # held < 10 min -> ignored
+
+    def test_min_hold_allows_late_sell(self):
+        config.MIN_HOLD_MINUTES = 10
+        self.b.risk.positions = {"AAPL": SimpleNamespace(opened=datetime.now(_ET) - timedelta(minutes=20))}
+        self.b._close = mock.Mock()
+        self.b._handle_signal(Signal("AAPL", SELL, "momentum", "exit", 100.0))
+        self.b._close.assert_called_once()         # held > 10 min -> exits
 
 
 if __name__ == "__main__":

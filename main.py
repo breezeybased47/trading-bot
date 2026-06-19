@@ -146,7 +146,10 @@ class Bot:
             if result:
                 stop_ticker, reason = result
                 self._stop_out(stop_ticker, reason)
-            # 2b. Partial profit taking / scaling out (only when enabled, still open)
+            # 2b. Profit target — let it ride, then bank the win at the target
+            elif self._profit_target_hit(pos):
+                self._close(ticker, reason="profit target +%.2f%%" % (pos.pnl_pct * 100))
+            # 2c. Partial profit taking / scaling out (only when enabled, still open)
             elif config.SCALING_ENABLED and ticker in self.risk.positions:
                 action = self.scaler.check(ticker, pos.entry, price, pos.qty)
                 if action["action"] == "sell_partial":
@@ -180,7 +183,13 @@ class Bot:
             self._open(sig, qty, tags)
 
         elif sig.action == SELL:
-            if sig.ticker in self.risk.positions:
+            pos = self.risk.positions.get(sig.ticker)
+            if pos:
+                held_min = (datetime.now(ET) - pos.opened).total_seconds() / 60.0
+                if config.MIN_HOLD_MINUTES and held_min < config.MIN_HOLD_MINUTES:
+                    logger.debug("Holding %s (%.1f<%d min) — ignoring early SELL signal",
+                                 sig.ticker, held_min, config.MIN_HOLD_MINUTES)
+                    return
                 self._close(sig.ticker, reason=sig.reason)
 
     def _approve_and_size(self, sig: Signal) -> Optional[Tuple[int, dict]]:
@@ -197,9 +206,9 @@ class Bot:
             logger.debug("BUY blocked (%s): %s", ticker, reason)
             return None
 
-        # Leveraged ETFs (TQQQ/SQQQ): no new entries — we use the NASDAQ as a direction gauge instead
-        if not config.TRADE_LEVERAGED_ETFS and ticker in config.LEVERAGED_ETFS:
-            logger.info("BUY blocked (%s): leveraged-ETF trading off (direction-gauge only)", ticker)
+        # Index / leverage proxies (QQQ, TQQQ, SQQQ) are direction INDICATORS, not positions
+        if ticker == config.QQQ_TICKER or (not config.TRADE_LEVERAGED_ETFS and ticker in config.LEVERAGED_ETFS):
+            logger.info("BUY blocked (%s): indicator, not traded", ticker)
             return None
 
         # Adaptive cooldown / heat
@@ -384,6 +393,14 @@ class Bot:
         self._close(ticker, reason=f"STOP: {reason}")
 
     # ── Kill switch & pre-market trigger ──────────────────────────────────────
+
+    def _profit_target_hit(self, pos) -> bool:
+        """True when an open position has reached the take-profit target ($ or %)."""
+        if config.TARGET_PROFIT_DOLLARS and pos.pnl >= config.TARGET_PROFIT_DOLLARS:
+            return True
+        if config.TARGET_PROFIT_PCT and pos.pnl_pct >= config.TARGET_PROFIT_PCT:
+            return True
+        return False
 
     def _check_kill_switch(self):
         if self._killed or not os.path.exists(config.KILL_SWITCH_FILE):
