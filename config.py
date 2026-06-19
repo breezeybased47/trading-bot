@@ -73,6 +73,11 @@ TRAILING_STOP_TRIGGER   = 0.01   # Activate trailing stop when position is up 1%
 DAILY_LOSS_LIMIT_PCT    = 0.05   # Halt all trading if portfolio drops 5% today
 UNFILLED_ORDER_TIMEOUT  = 60     # Cancel orders still unfilled after 60 seconds
 
+# ─── HOLD DISCIPLINE (stop the rapid churn; ride winners to a target) ──────────
+MIN_HOLD_MINUTES      = 10      # ignore a strategy SELL within N min of entry (stops still fire)
+TARGET_PROFIT_PCT     = 0.02    # take profit when a position is up this fraction (0 = off)
+TARGET_PROFIT_DOLLARS = 0       # ...or a fixed $ profit (0 = use the %); whichever triggers first
+
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 TRADES_LOG_FILE = "logs/trades.csv"
 
