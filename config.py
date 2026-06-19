@@ -31,6 +31,15 @@ LEVERAGED_ETFS = ["TQQQ", "SQQQ"]
 # The actual tech names — used by the correlation guard's "if TQQQ is open, restrict
 # additional long-tech" rule so the non-tech diversifiers above don't get caught by it.
 TECH_NAMES = ["NVDA", "TSLA", "AAPL", "MSFT", "META", "GOOGL", "AMD", "AMZN"]
+
+# ─── Leveraged ETFs: stop trading them; use the NASDAQ trend as a direction gauge ──
+TRADE_LEVERAGED_ETFS = False   # block NEW TQQQ/SQQQ entries (existing positions still exit)
+# Long-term market-direction filter — from QQQ's daily trend (TQQQ/SQQQ are just 3x QQQ,
+# so QQQ is the same signal without the leverage noise):
+MARKET_DIRECTION_ENABLED = True   # gauge BULL / BEAR / NEUTRAL from QQQ's 50/200-day trend
+MARKET_BEAR_SIZE_MULT    = 0.5    # in a confirmed long-term DOWNtrend, size longs at this fraction
+MARKET_SMA_FAST          = 50     # daily SMA (intermediate trend)
+MARKET_SMA_SLOW          = 200    # daily SMA (long-term trend)
 QQQ_TICKER = "QQQ"          # Used for NASDAQ trend detection
 
 # ─── MARKET HOURS (ET) ────────────────────────────────────────────────────────

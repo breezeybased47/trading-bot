@@ -152,6 +152,13 @@ TEMPLATE = """<!DOCTYPE html>
 
 <div class="cards">
   <div class="card">
+    <div class="card-label">Market Direction</div>
+    <div class="card-value" style="font-size:17px">{{ research.market.direction if research.market else '—' }}</div>
+    <div class="sub">
+      {%- if research.market and research.market.size_mult and research.market.size_mult != 1.0 %}<span class="red">defensive · size x{{ research.market.size_mult }}</span>
+      {%- elif research.market %}QQQ 50/200-day trend{% else %}long-term trend{% endif %}</div>
+  </div>
+  <div class="card">
     <div class="card-label">Market Regime</div>
     <div class="card-value" style="font-size:17px">{{ research.regime.regime if research.regime else '—' }}</div>
     <div class="sub">{% if research.regime and research.regime.blocked %}<span class="red">⛔ REGIME BLOCKED</span>{% elif research.regime %}exp ${{ "%.2f"|format(research.regime.expectancy) }} · n={{ research.regime.sample }}{% endif %}</div>
