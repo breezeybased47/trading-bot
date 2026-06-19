@@ -17,7 +17,8 @@ from typing import Dict, List, Optional, Tuple
 import pytz
 
 from config import (
-    DAILY_LOSS_LIMIT_PCT, LEVERAGED_ETF_CLOSE_TIME, LEVERAGED_ETFS,
+    DAILY_LOSS_LIMIT_PCT, EOD_FLATTEN_ENABLED, EOD_FLATTEN_TIME,
+    LEVERAGED_ETF_CLOSE_TIME, LEVERAGED_ETFS,
     MARKET_CLOSE, MARKET_OPEN, MAX_OPEN_POSITIONS, MAX_POSITION_PCT,
     STOP_LOSS_PCT, TRAILING_STOP_PCT, TRAILING_STOP_TRIGGER,
 )
@@ -101,6 +102,10 @@ class RiskManager:
     def etf_cutoff_passed(self) -> bool:
         return datetime.now(ET).strftime("%H:%M") >= LEVERAGED_ETF_CLOSE_TIME
 
+    def eod_flatten_passed(self) -> bool:
+        """True once we've reached the day-trading flatten time (no overnight holds)."""
+        return EOD_FLATTEN_ENABLED and datetime.now(ET).strftime("%H:%M") >= EOD_FLATTEN_TIME
+
     # ── Daily reset ───────────────────────────────────────────────────────────
 
     def _daily_check(self):
@@ -125,6 +130,9 @@ class RiskManager:
 
         if not self.market_is_open():
             return False, "Outside market hours"
+
+        if self.eod_flatten_passed():
+            return False, f"Past {EOD_FLATTEN_TIME} — flattening into the close, no new entries"
 
         if ticker in LEVERAGED_ETFS and self.etf_cutoff_passed():
             return False, f"Past {LEVERAGED_ETF_CLOSE_TIME} — no new leveraged ETF positions"
@@ -228,3 +236,9 @@ class RiskManager:
         if not self.etf_cutoff_passed():
             return []
         return [t for t in self.positions if t in LEVERAGED_ETFS]
+
+    def positions_to_flatten(self) -> List[str]:
+        """Every open position to close before the bell (day-trading: flat overnight)."""
+        if not self.eod_flatten_passed():
+            return []
+        return list(self.positions)

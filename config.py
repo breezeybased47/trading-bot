@@ -46,6 +46,8 @@ QQQ_TICKER = "QQQ"          # Used for NASDAQ trend detection
 MARKET_OPEN              = "09:30"
 MARKET_CLOSE             = "16:00"
 LEVERAGED_ETF_CLOSE_TIME = "15:45"  # Force-close all leveraged ETFs by 3:45 PM
+EOD_FLATTEN_ENABLED      = True     # Day-trading: close EVERY position before the bell (no overnight gap risk)
+EOD_FLATTEN_TIME         = "15:55"  # Flatten all positions + stop new entries at 3:55 PM ET
 
 # ─── INDICATOR SETTINGS ───────────────────────────────────────────────────────
 RSI_PERIOD   = 14
@@ -73,10 +75,14 @@ TRAILING_STOP_TRIGGER   = 0.01   # Activate trailing stop when position is up 1%
 DAILY_LOSS_LIMIT_PCT    = 0.05   # Halt all trading if portfolio drops 5% today
 UNFILLED_ORDER_TIMEOUT  = 60     # Cancel orders still unfilled after 60 seconds
 
-# ─── HOLD DISCIPLINE (stop the rapid churn; ride winners to a target) ──────────
+# ─── HOLD DISCIPLINE (stop the rapid churn; ride winners) ─────────────────────
 MIN_HOLD_MINUTES      = 10      # ignore a strategy SELL within N min of entry (stops still fire)
-TARGET_PROFIT_PCT     = 0.02    # take profit when a position is up this fraction (0 = off)
-TARGET_PROFIT_DOLLARS = 0       # ...or a fixed $ profit (0 = use the %); whichever triggers first
+# "Bank half, ride half" is handled by the staged SCALING ladder below (sell 50%
+# at +2%, 25% at +3%, trail the last 25%). These two are an OPTIONAL hard backstop
+# that closes the WHOLE position at a fixed target — left OFF so scaling can ride
+# the runner. Set TARGET_PROFIT_DOLLARS>0 if you ever want a hard $ cap instead.
+TARGET_PROFIT_PCT     = 0       # hard full-close at this % gain (0 = off; scaling owns the exit)
+TARGET_PROFIT_DOLLARS = 0       # ...or a hard full-close at a fixed $ profit (0 = off)
 
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 TRADES_LOG_FILE = "logs/trades.csv"
@@ -161,7 +167,7 @@ HEAT_COOLDOWN_MIN_PER_UNIT = 5         # extra cooldown minutes per point of hea
 
 # ─── Module 6 — Partial profit taking / scaling out ───────────────────────────
 SCALING_ENABLED            = True       # ON (combined bot): bank partial profits as winners run
-SCALE_TIER1_TRIGGER_PCT    = 0.015      # +1.5% unrealized...
+SCALE_TIER1_TRIGGER_PCT    = 0.02       # +2% unrealized... ("bank half" target)
 SCALE_TIER1_SELL_FRAC      = 0.50       # ...sell 50%, move stop to breakeven on the rest
 SCALE_TIER2_TRIGGER_PCT    = 0.03       # +3% unrealized...
 SCALE_TIER2_SELL_FRAC      = 0.25       # ...sell another 25%, tighten trailing on last 25%

@@ -22,7 +22,7 @@ config.REGIME_PERF_FILE = os.path.join(_TMP, "regime.json")
 config.RESEARCH_MODE = False
 
 import main                                            # noqa: E402
-from modules import journal                            # noqa: E402
+from modules import journal, risk_manager              # noqa: E402
 from modules.strategy import Signal, BUY, SELL         # noqa: E402
 from datetime import datetime, timedelta               # noqa: E402
 from types import SimpleNamespace                       # noqa: E402
@@ -120,17 +120,52 @@ class TestEntryGauntlet(unittest.TestCase):
 
     def test_min_hold_ignores_early_sell(self):
         config.MIN_HOLD_MINUTES = 10
-        self.b.risk.positions = {"AAPL": SimpleNamespace(opened=datetime.now(_ET))}
+        self.b.risk.positions = {"AAPL": SimpleNamespace(opened=datetime.now(_ET), strategy="momentum")}
         self.b._close = mock.Mock()
         self.b._handle_signal(Signal("AAPL", SELL, "momentum", "exit", 100.0))
         self.b._close.assert_not_called()          # held < 10 min -> ignored
 
     def test_min_hold_allows_late_sell(self):
         config.MIN_HOLD_MINUTES = 10
-        self.b.risk.positions = {"AAPL": SimpleNamespace(opened=datetime.now(_ET) - timedelta(minutes=20))}
+        self.b.risk.positions = {"AAPL": SimpleNamespace(
+            opened=datetime.now(_ET) - timedelta(minutes=20), strategy="momentum")}
         self.b._close = mock.Mock()
         self.b._handle_signal(Signal("AAPL", SELL, "momentum", "exit", 100.0))
-        self.b._close.assert_called_once()         # held > 10 min -> exits
+        self.b._close.assert_called_once()         # matching strategy, held > 10 min -> exits
+
+    def test_mean_rev_exit_does_not_dump_momentum(self):
+        # THE churn cure: a mean-reversion "price back at VWAP" SELL must NOT close
+        # a momentum position (even past the min-hold window). It rides instead.
+        config.MIN_HOLD_MINUTES = 10
+        self.b.risk.positions = {"AAPL": SimpleNamespace(
+            opened=datetime.now(_ET) - timedelta(minutes=20), strategy="momentum")}
+        self.b._close = mock.Mock()
+        self.b._handle_signal(Signal("AAPL", SELL, "mean_reversion", "Price reached VWAP", 100.0))
+        self.b._close.assert_not_called()          # strategy mismatch -> let it ride
+
+
+class TestEodFlatten(unittest.TestCase):
+    """Day-trading discipline: flatten EVERY position before the close (no overnight holds)."""
+
+    def setUp(self):
+        self.rm = risk_manager.RiskManager(mock.Mock())
+        self.rm.positions = {"AAPL": object(), "MSFT": object()}
+        self._orig = (risk_manager.EOD_FLATTEN_ENABLED, risk_manager.EOD_FLATTEN_TIME)
+
+    def tearDown(self):
+        risk_manager.EOD_FLATTEN_ENABLED, risk_manager.EOD_FLATTEN_TIME = self._orig
+
+    def test_flatten_all_when_past_cutoff(self):
+        risk_manager.EOD_FLATTEN_ENABLED, risk_manager.EOD_FLATTEN_TIME = True, "00:00"
+        self.assertEqual(set(self.rm.positions_to_flatten()), {"AAPL", "MSFT"})
+
+    def test_no_flatten_before_cutoff(self):
+        risk_manager.EOD_FLATTEN_ENABLED, risk_manager.EOD_FLATTEN_TIME = True, "23:59"
+        self.assertEqual(self.rm.positions_to_flatten(), [])
+
+    def test_disabled_never_flattens(self):
+        risk_manager.EOD_FLATTEN_ENABLED, risk_manager.EOD_FLATTEN_TIME = False, "00:00"
+        self.assertEqual(self.rm.positions_to_flatten(), [])
 
 
 if __name__ == "__main__":
