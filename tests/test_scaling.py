@@ -29,7 +29,7 @@ class TestDecide(unittest.TestCase):
         self.assertEqual(scaling.decide(100, 101.0, 100, 100, set())["action"], "none")  # +1%
 
     def test_tier1_sells_half_and_breakeven(self):
-        a = scaling.decide(100, 101.5, 100, 100, set())   # +1.5%
+        a = scaling.decide(100, 102.0, 100, 100, set())   # +2%
         self.assertEqual(a["tier"], "tier1")
         self.assertEqual(a["sell_qty"], 50)
         self.assertEqual(a["new_stop"], 100.0)
@@ -50,7 +50,7 @@ class TestDecide(unittest.TestCase):
         self.assertEqual(scaling.decide(100, 105, 100, 25, {"tier1", "tier2"})["action"], "none")
 
     def test_tiny_position_cannot_scale(self):
-        a = scaling.decide(100, 101.5, 1, 1, set())       # round(0.5) -> 0
+        a = scaling.decide(100, 102.0, 1, 1, set())       # +2%, round(0.5) -> 0
         self.assertEqual(a["action"], "none")
         self.assertEqual(a["reason"], "tier1_qty<1")
 
@@ -62,7 +62,7 @@ class TestScalingManager(unittest.TestCase):
 
     def test_full_lifecycle(self):
         self.m.on_open("AAPL", 100)
-        a1 = self.m.check("AAPL", 100, 101.5, 100)        # tier1
+        a1 = self.m.check("AAPL", 100, 102.0, 100)        # tier1 (+2%)
         self.assertEqual(a1["tier"], "tier1")
         again = self.m.check("AAPL", 100, 101.6, 50)      # tier1 already fired
         self.assertEqual(again["action"], "none")

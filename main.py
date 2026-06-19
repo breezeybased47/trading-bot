@@ -160,6 +160,12 @@ class Bot:
             logger.info(f"Force-close {etf} — approaching {config.LEVERAGED_ETF_CLOSE_TIME}")
             self._close(etf, reason="End-of-day forced close")
 
+        # 3b. Flatten ALL remaining positions into the close — day-trading discipline,
+        #     no overnight gap risk now that winners are held instead of flipped.
+        for t in self.risk.positions_to_flatten():
+            logger.info(f"EOD flatten {t} — approaching close ({config.EOD_FLATTEN_TIME})")
+            self._close(t, reason="End-of-day flatten")
+
         # 4. Cancel orders open too long
         self.broker.cancel_stale()
 
@@ -185,6 +191,14 @@ class Bot:
         elif sig.action == SELL:
             pos = self.risk.positions.get(sig.ticker)
             if pos:
+                # A strategy's exit only closes a position THAT strategy opened.
+                # Stops, trailing stops and the scaling ladder are handled in on_bar;
+                # this stops the mean-reversion "price back at VWAP" exit from dumping
+                # a momentum position one bar after entry (the old rapid-churn bug).
+                if sig.strategy != pos.strategy:
+                    logger.debug("Ignoring %s SELL for %s — opened by %s, letting it ride",
+                                 sig.strategy, sig.ticker, pos.strategy)
+                    return
                 held_min = (datetime.now(ET) - pos.opened).total_seconds() / 60.0
                 if config.MIN_HOLD_MINUTES and held_min < config.MIN_HOLD_MINUTES:
                     logger.debug("Holding %s (%.1f<%d min) — ignoring early SELL signal",
