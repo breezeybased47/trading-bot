@@ -37,6 +37,7 @@ def _default_toggles_off():
     config.ML_FILTER_ENABLED = False
     config.ECON_GUARD_ENABLED = False
     config.LEVERAGED_ETF_REGIME_GUARD_ENABLED = False
+    config.TRADE_LEVERAGED_ETFS = False
     config.SIZING_MODEL = "fixed"
 
 
@@ -91,6 +92,11 @@ class TestEntryGauntlet(unittest.TestCase):
             "size_mult": 0.5, "expectancy": 0.0, "sample": 5}
         qty, _ = self.b._approve_and_size(self.sig)
         self.assertEqual(qty, 50)                 # 100 * 0.5
+
+    def test_leveraged_etf_entries_blocked(self):
+        config.TRADE_LEVERAGED_ETFS = False
+        sig = Signal("TQQQ", BUY, "etf_rotation", "no leveraged trading", 50.0)
+        self.assertIsNone(self.b._approve_and_size(sig))
 
 
 if __name__ == "__main__":

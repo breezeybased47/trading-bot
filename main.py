@@ -38,6 +38,7 @@ from modules import leverage_guard
 from modules.indicators import compute, latest as ind_latest
 from modules.latency_monitor import LatencyMonitor
 from modules.liquidity_guard import LiquidityGuard
+from modules.market_direction import MarketDirection
 from modules.ml_filter import MLFilter
 from modules.position_sizer import PositionSizer
 from modules.premarket_scanner import PremarketScanner
@@ -82,6 +83,7 @@ class Bot:
         self.regime      = RegimeFilter(self.feed)
         self.sizer       = PositionSizer(self.broker, self.feed)
         self.correlation = CorrelationMonitor(self.feed.hist_client)
+        self.market      = MarketDirection(self.feed.hist_client)   # long-term NASDAQ direction
         self.liquidity   = LiquidityGuard(self.feed)
         self.cooldowns   = CooldownManager()
         self.scaler      = ScalingManager()
@@ -125,6 +127,7 @@ class Bot:
 
         # Re-classify the market on its own 5-minute cadence (cheap, self-throttled)
         self.regime.reclassify_if_due()
+        self.market.refresh_if_due()        # long-term NASDAQ direction (daily, self-throttled)
 
         # Paper challengers — independent strategies, NO real orders (course A/B test)
         self.paper.on_bar(ticker, candles)
@@ -194,6 +197,11 @@ class Bot:
             logger.debug("BUY blocked (%s): %s", ticker, reason)
             return None
 
+        # Leveraged ETFs (TQQQ/SQQQ): no new entries — we use the NASDAQ as a direction gauge instead
+        if not config.TRADE_LEVERAGED_ETFS and ticker in config.LEVERAGED_ETFS:
+            logger.info("BUY blocked (%s): leveraged-ETF trading off (direction-gauge only)", ticker)
+            return None
+
         # Adaptive cooldown / heat
         cd = self.cooldowns.is_blocked(ticker)
         if cd["blocked"]:
@@ -250,7 +258,7 @@ class Bot:
 
         # Sizing — default 'fixed' uses the existing risk.size (behavior-preserving);
         # vol_adjusted / kelly opt into the position_sizer (and its 25% total cap).
-        size_mult = rd["size_mult"] * pm_mult * econ["size_mult"]
+        size_mult = rd["size_mult"] * pm_mult * econ["size_mult"] * self.market.size_mult()
         if config.SIZING_MODEL == "fixed":
             qty = max(0, int(self.risk.size(price) * size_mult))
             model_used, size_reason = "fixed", "fixed 10%% x mult %.2f" % size_mult
@@ -406,6 +414,7 @@ class Bot:
         challengers.update(self.paper.comparison())   # reversal + champ_confirmed paper books
         return {
             "regime": self.regime.status(),
+            "market": self.market.status(),
             "cooldowns": self.cooldowns.status(),
             "correlation": self.correlation.heatmap_data(),
             "shadow": {"comparison": self.shadow.comparison(),
@@ -467,6 +476,7 @@ class Bot:
         if synced:
             logger.info("Reconciled %d existing account position(s) — cap now accounts for them", synced)
         self.regime.update_performance_snapshot()
+        self.market.refresh()               # initial long-term direction read at startup
         if self._shadow_on:
             self.shadow.start()
         start_web()
